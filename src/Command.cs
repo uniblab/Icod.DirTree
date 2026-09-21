@@ -16,9 +16,14 @@
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program.If not, see<https://www.gnu.org/licenses/>.
+	along with this program.If not, see<https://gnu.org>.
 */
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Icod.Collections.Immutable;
 using Icod.CommandFramework.CommandLine;
 using Icod.CommandFramework.Diagnostics;
@@ -108,11 +113,12 @@ namespace Icod.DirTree {
 				}
 				if ( result.HasOption( "help" ) ) {
 					const string help = """
-Usage: arch [OPTION]...
-Print machine architecture.
+Usage: dirtree [OPTION]...
+Print directory tree.
 
       --help     display this help and exit
       --version  output version information and exit
+
 """;
 					await context.StandardOutput.WriteAsync(
 						help.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
@@ -135,22 +141,10 @@ Print machine architecture.
 					return 1;
 				}
 				context.CancellationToken.ThrowIfCancellationRequested();
-z
+
 				// here is where we spit out the text
-				var syntax = Icod.Path.PathSyntaxParser.Parse(
-					args[ 0 ],
-					Icod.Path.PathPlatformSemantics.Windows
-				);
-				var components = new System.Collections.Generic.List<System.String>();
-				if ( !System.String.IsNullOrEmpty( syntax.RootPath ) ) {
-					components.Add( syntax.RootPath );
-				}
-				components.AddRange( syntax.Components );
-				System.Console.Out.WriteLine( syntax.IsAbsolute );
-				System.Console.Out.WriteLine( System.String.Empty );
-				var results = GlobFiles( components.AsReadOnly(), result.HasOption( "files" ) );
-				foreach ( var file in results ) {
-					System.Console.Out.WriteLine( file );
+				foreach ( var entry in RenderDirectoryTree( args[ 0 ], result.HasOption( "files" ) ) ) {
+					System.Console.Out.WriteLine( entry );
 				}
 
 				return 0;
@@ -188,7 +182,6 @@ z
 			}
 
 			// Initialize your immutable queue structure using its Empty factory pattern
-			// We track both the working directory path and the index of the path token we are evaluating
 			var frontier = Icod.Collections.Immutable.Queue<SearchState>.GetEmpty();
 
 			// Seed the queue with the root path segment (e.g., "C:\") at segment index 1
@@ -205,14 +198,23 @@ z
 				string dir = state.CurrentDir;
 				int idx = state.SegmentIndex;
 
-				// Base Case: We have reached the final segment, which is the file pattern (e.g., "TC07*.cs")
+				// Base Case: We have reached the final path segment
 				if ( idx == segments.Count - 1 ) {
-					string filePattern = segments[ idx ];
+					string lastPattern = segments[ idx ];
 					if ( System.IO.Directory.Exists( dir ) ) {
-						// Safe execution using standard TopDirectoryOnly to keep disk operations bounded
-						string[] matchingFiles = System.IO.Directory.GetFiles( dir, filePattern, System.IO.SearchOption.TopDirectoryOnly );
-						foreach ( var matchingFile in matchingFiles ) {
-							yield return matchingFile;
+						// Directories are always reported if they match the final structural constraint
+						// Check if the final segment pattern matches any subdirectories here
+						string[] matchingDirs = System.IO.Directory.GetDirectories( dir, lastPattern, System.IO.SearchOption.TopDirectoryOnly );
+						foreach ( var matchingDir in matchingDirs ) {
+							yield return matchingDir;
+						}
+
+						// Files are only reported if the includeFiles flag is explicitly true
+						if ( includeFiles ) {
+							string[] matchingFiles = System.IO.Directory.GetFiles( dir, lastPattern, System.IO.SearchOption.TopDirectoryOnly );
+							foreach ( var matchingFile in matchingFiles ) {
+								yield return matchingFile;
+							}
 						}
 					}
 					continue;
@@ -227,30 +229,130 @@ z
 					frontier = frontier.Enqueue( new SearchState( dir, idx + 1 ) );
 
 					// 1b. '**' can match ONE OR MORE directories.
-					// We grab immediate subdirectories and keep them at the SAME segment index so they continue to recurse.
+					// We grab immediate subdirectories, report them, and keep them at the SAME segment index to recurse further.
 					if ( System.IO.Directory.Exists( dir ) ) {
 						string[] subDirs = System.IO.Directory.GetDirectories( dir, "*", System.IO.SearchOption.TopDirectoryOnly );
 						foreach ( string sub in subDirs ) {
+							yield return sub; // Directory discovered via traversal is reported
 							frontier = frontier.Enqueue( new SearchState( sub, idx ) );
 						}
 					}
 				}
 				// Case 2: A concrete directory name (e.g., "samples") or a localized wildcard segment (e.g., "src*")
 				else {
-					if ( Directory.Exists( dir ) ) {
+					if ( System.IO.Directory.Exists( dir ) ) {
 						// Filter directories immediately at the OS level using the path token string pattern
 						string[] matchingSubs = System.IO.Directory.GetDirectories( dir, currentToken, System.IO.SearchOption.TopDirectoryOnly );
 						foreach ( string sub in matchingSubs ) {
-							// Progress happily to the next segment constraint
+							yield return sub; // Directory discovered via traversal is reported
+											  // Progress happily to the next segment constraint
 							frontier = frontier.Enqueue( new SearchState( sub, idx + 1 ) );
 						}
 					}
 				}
 			}
-
 		}
 
 		private record SearchState( string CurrentDir, int SegmentIndex );
+
+		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot );
+
+		/// <summary>
+		/// Explicit implementation of your ICanonicalPathFileSystemProvider interface 
+		/// to safely bridge .NET 10 file system capabilities to the CanonicalPathResolver.
+		/// </summary>
+		private class LocalFileSystemProvider : Icod.Path.ICanonicalPathFileSystemProvider {
+			public string GetCanonicalPath( string path ) => System.IO.Path.GetFullPath( path );
+
+			public FileSystemInfo? ResolveLinkTarget( string path, bool returnFinalTarget ) =>
+				Directory.ResolveLinkTarget( path, returnFinalTarget );
+
+
+			public Icod.Path.PathPlatformSemantics Semantics => OperatingSystem.IsWindows()
+				? Icod.Path.PathPlatformSemantics.Windows
+				: Icod.Path.PathPlatformSemantics.Posix
+			;
+
+			public string CurrentDirectory => Environment.CurrentDirectory;
+
+			public ValueTask<Icod.Path.PathComponentObservation> ObserveAsync( string path, CancellationToken cancellationToken ) {
+				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation ) );
+			}
+		}
+
+		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles ) {
+			if ( !Directory.Exists( rootPath ) ) {
+				yield break;
+			}
+
+			bool ignoreCase = !OperatingSystem.IsLinux();
+			var stringComparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+			// Use our local bridge implementation to cleanly initialize the resolver
+			var fsProvider = new LocalFileSystemProvider();
+			var pathResolver = new Icod.Path.CanonicalPathResolver( fsProvider );
+
+			var visitedPhysicalPaths = new HashSet<string>( stringComparer );
+			var stack = Icod.Collections.Immutable.Stack<TreeFrame>.GetEmpty();
+
+			string absoluteRoot = System.IO.Path.GetFullPath( rootPath );
+			stack = stack.Push( new TreeFrame( absoluteRoot, string.Empty, IsLast: true, IsRoot: true ) );
+
+			while ( !stack.IsEmpty ) {
+				TreeFrame current = stack.Peek();
+				stack = stack.Pop();
+
+				string path = current.Path;
+				bool isDir = Directory.Exists( path );
+
+				if ( current.IsRoot ) {
+					yield return $"[D] {System.IO.Path.GetFileName( path )}";
+				} else {
+					string marker = isDir ? "[D] " : "[F] ";
+					string branch = current.IsLast ? "└── " : "├── ";
+					yield return $"{current.Indent}{branch}{marker}{System.IO.Path.GetFileName( path )}";
+				}
+
+				if ( isDir ) {
+					string canonicalPath = fsProvider.GetCanonicalPath( path );
+
+					// Protect against structural cycles by tracking physical path target strings directly
+					if ( !visitedPhysicalPaths.Add( canonicalPath ) && !current.IsRoot ) {
+						string childIndent = current.Indent + ( current.IsLast ? "    " : "│   " );
+						yield return $"{childIndent}└── [Circular Link / Junction Loop Intercepted]";
+						continue;
+					}
+
+					var children = new List<string>();
+					System.Boolean accessDenied = false;
+					try {
+						children.AddRange( Directory.GetDirectories( path, "*", SearchOption.TopDirectoryOnly ) );
+
+						if ( includeFiles ) {
+							children.AddRange( Directory.GetFiles( path, "*", SearchOption.TopDirectoryOnly ) );
+						}
+					} catch ( UnauthorizedAccessException ) {
+						accessDenied = true;
+					} catch ( IOException ) {
+						continue;
+					}
+					if ( accessDenied ) {
+						string childIndent = current.Indent + ( current.IsLast ? "    " : "│   " );
+						yield return $"{childIndent}└── [Access Denied]";
+						continue;
+					}
+
+					children.Sort( stringComparer );
+
+					string nextIndent = current.IsRoot ? string.Empty : current.Indent + ( current.IsLast ? "    " : "│   " );
+
+					for ( int i = children.Count - 1; i >= 0; i-- ) {
+						bool isLastChild = ( i == children.Count - 1 );
+						stack = stack.Push( new TreeFrame( children[ i ], nextIndent, isLastChild, IsRoot: false ) );
+					}
+				}
+			}
+		}
 
 	}
 
