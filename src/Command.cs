@@ -54,7 +54,7 @@ namespace Icod.DirTree {
 			public string CurrentDirectory => Environment.CurrentDirectory;
 
 			public ValueTask<Icod.Path.PathComponentObservation> ObserveAsync( string path, CancellationToken cancellationToken ) {
-				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation ) );
+				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation )! );
 			}
 		}
 		#endregion nested types

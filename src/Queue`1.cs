@@ -32,9 +32,9 @@ namespace Icod.Collections.Immutable {
 			private static readonly System.Int32 theHashCode;
 
 			static EmptyQueue() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
 			}
 			public EmptyQueue() : base() { 
@@ -157,18 +157,16 @@ namespace Icod.Collections.Immutable {
 			theEmpty = new EmptyQueue();
 		}
 
-		private Queue() : base() { 
-			myHashCode = theEmpty.GetHashCode();
-		}
-		private Queue( IStack<T> read, IStack<T> write ) : this() { 
+		private Queue( IStack<T> read, IStack<T> write ) : base() {
 			if ( null == write ) { 
-				throw new System.ArgumentNullException( "write" );
+				throw new System.ArgumentNullException( nameof( write ) );
 			} else if ( null == read ) { 
-				throw new System.ArgumentNullException( "read" );
+				throw new System.ArgumentNullException( nameof( read ) );
 			}
 			myRead = read;
 			myWrite = write;
 			myCount = read.Count + write.Count;
+			myHashCode = theEmpty.GetHashCode();
 			unchecked { 
 				if ( false == myRead.IsEmpty ) { 
 					myHashCode += myRead.GetHashCode();

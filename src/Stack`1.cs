@@ -32,9 +32,9 @@ namespace Icod.Collections.Immutable {
 			private static readonly System.Int32 theHashCode;
 
 			static EmptyStack() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
 			}
 			public EmptyStack() : base() { 
@@ -154,15 +154,13 @@ namespace Icod.Collections.Immutable {
 			theEmpty = new EmptyStack();
 		}
 
-		private Stack() { 
-			myHashCode = theEmpty.GetHashCode();
-		}
 		private Stack( T value ) : this( value, theEmpty ) { 
 		}
-		private Stack( T value, IStack<T> tail ) : this() { 
+		private Stack( T value, IStack<T> tail ) : base() { 
 			myValue = value;
 			myTail = tail;
 			myCount = 1 + tail.Count;
+			myHashCode = theEmpty.GetHashCode();
 			unchecked { 
 				myHashCode += tail.GetHashCode();
 				if ( null != value ) { 

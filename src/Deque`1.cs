@@ -64,11 +64,9 @@ namespace Icod.Collections.Immutable {
 			private readonly System.Int32 myHashCode;
 			private readonly T v1;
 
-			private Mini1() : base() {
-				myHashCode = Deque<T>.Empty.GetHashCode();
-			}
-			public Mini1( T t ) : this() { 
+			public Mini1( T t ) : base() { 
 				v1 = t;
+				myHashCode = Deque<T>.Empty.GetHashCode();
 				unchecked { 
 					if ( null != v1 ) { 
 						myHashCode += v1.GetHashCode();
@@ -120,12 +118,10 @@ namespace Icod.Collections.Immutable {
 			private readonly T v1;
 			private readonly T v2;
 
-			private Mini2() : base() {
-				myHashCode = Deque<T>.Empty.GetHashCode();
-			}
-			public Mini2( T t1, T t2 ) : this() {
+			public Mini2( T t1, T t2 ) : base() {
 				v1 = t1;
 				v2 = t2;
+				myHashCode = Deque<T>.Empty.GetHashCode();
 				unchecked {
 					if ( null != v1 ) {
 						myHashCode += v1.GetHashCode();
@@ -181,13 +177,11 @@ namespace Icod.Collections.Immutable {
 			private readonly T v2;
 			private readonly T v3;
 
-			private Mini3() : base() {
-				myHashCode = Deque<T>.Empty.GetHashCode();
-			}
-			public Mini3( T t1, T t2, T t3 ) : this() {
+			public Mini3( T t1, T t2, T t3 ) : base() {
 				v1 = t1;
 				v2 = t2;
 				v3 = t3;
+				myHashCode = Deque<T>.Empty.GetHashCode();
 				unchecked {
 					if ( null != v1 ) {
 						myHashCode += v1.GetHashCode();
@@ -248,14 +242,12 @@ namespace Icod.Collections.Immutable {
 			private readonly T v3;
 			private readonly T v4;
 
-			private Mini4() : base() {
-				myHashCode = Deque<T>.Empty.GetHashCode();
-			}
-			public Mini4( T t1, T t2, T t3, T t4 ) : this() {
+			public Mini4( T t1, T t2, T t3, T t4 ) : base() {
 				v1 = t1;
 				v2 = t2;
 				v3 = t3;
 				v4 = t4;
+				myHashCode = Deque<T>.Empty.GetHashCode();
 				unchecked { 
 					if ( null != v1 ) { 
 						myHashCode += v1.GetHashCode();
@@ -324,9 +316,9 @@ namespace Icod.Collections.Immutable {
 			private static readonly System.Int32 theHashCode;
 
 			static EmptyDeque() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
 			}
 			public EmptyDeque() : base() { 
@@ -514,22 +506,20 @@ namespace Icod.Collections.Immutable {
 			private readonly System.Int32 myCount;
 
 			static Single() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
-			}
-			private Single() : base() { 
-				myHashCode = theHashCode;
 			}
 			public Single( T t ) : this( new Mini1( t ) ) { 
 			}
-			public Single( MiniDeque store ) : this() { 
+			public Single( MiniDeque store ) : base() { 
 				if ( null == store ) { 
 					throw new System.ArgumentNullException( "store" );
 				} else { 
 					myStore = store;
-			 		unchecked { 
+					myHashCode = theHashCode;
+					unchecked { 
 						myHashCode += myStore.GetHashCode();
 					}
 					myCount = myStore.Count;
@@ -799,15 +789,12 @@ namespace Icod.Collections.Immutable {
 			private readonly System.Int32 myCount;
 
 			static Double() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
 			}
-			private Double() : base() { 
-				myHashCode = theHashCode;
-			}
-			public Double( MiniDeque left, MiniDeque right ) : this() { 
+			public Double( MiniDeque left, MiniDeque right ) : base() { 
 				if ( null == left ) { 
 					throw new System.ArgumentNullException( "left" );
 				} else if ( null == right ) { 
@@ -815,6 +802,7 @@ namespace Icod.Collections.Immutable {
 				} else { 
 					myLeft = left;
 					myRight = right;
+					myHashCode = theHashCode;
 					unchecked { 
 						myHashCode += myLeft.GetHashCode();
 						myHashCode += myRight.GetHashCode();
@@ -1106,15 +1094,12 @@ namespace Icod.Collections.Immutable {
 			private readonly System.Int32 myCount;
 
 			static Triple() { 
-				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+				theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 				unchecked { 
-					theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+					theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 				}
 			}
-			private Triple() : base() { 
-				myHashCode = theHashCode;
-			}
-			public Triple( MiniDeque left, MiniDeque middle, MiniDeque right ) : this() { 
+			public Triple( MiniDeque left, MiniDeque middle, MiniDeque right ) : base() { 
 				if ( null == left ) { 
 					throw new System.ArgumentNullException( "left" );
 				} else if ( null == middle ) { 
@@ -1125,6 +1110,7 @@ namespace Icod.Collections.Immutable {
 					myLeft = left;
 					myMiddle = middle;
 					myRight = right;
+					myHashCode = theHashCode;
 					unchecked { 
 						myHashCode += myLeft.GetHashCode(); 
 						myHashCode += myMiddle.GetHashCode();
@@ -1476,17 +1462,14 @@ namespace Icod.Collections.Immutable {
 
 		#region .ctor
 		static Deque() { 
-			theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType().AssemblyQualifiedName.GetHashCode();
+			theHashCode = System.Reflection.Assembly.GetExecutingAssembly().GetType()!.AssemblyQualifiedName!.GetHashCode();
 			unchecked { 
-				theHashCode += typeof( T ).AssemblyQualifiedName.GetHashCode();
+				theHashCode += typeof( T )!.AssemblyQualifiedName!.GetHashCode();
 			}
 			theEmpty = new EmptyDeque();
 		}
 
-		private Deque() : base() { 
-			myHashCode = theHashCode;
-		}
-		private Deque( MiniDeque left, IDeque<MiniDeque> middle, MiniDeque right, System.Int32 count ) : this() { 
+		private Deque( MiniDeque left, IDeque<MiniDeque> middle, MiniDeque right, System.Int32 count ) : base() { 
 			if ( count <= 0 ) { 
 				throw new System.ArgumentOutOfRangeException( "count" );
 			} else if ( null == left ) {
@@ -1500,6 +1483,7 @@ namespace Icod.Collections.Immutable {
 			myMiddle = middle;
 			myRight = right;
 			myCount = count;
+			myHashCode = theHashCode;
 			unchecked { 
 				myHashCode += myLeft.GetHashCode();
 				myHashCode += myMiddle.GetHashCode();
