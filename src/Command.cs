@@ -22,6 +22,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Icod.Collections.Immutable;
@@ -279,7 +280,10 @@ Print directory tree.
 						) );
 
 						if ( includeFiles ) {
-							children.AddRange( Directory.GetFiles( path, "*", SearchOption.TopDirectoryOnly ) );
+							children.AddRange( Directory.GetFiles( path, "*", SearchOption.TopDirectoryOnly ).Where(
+								f => showHidden
+									|| 0 == ( new FileInfo( f ).Attributes & FileAttributes.Hidden )
+							) );
 						}
 					} catch ( UnauthorizedAccessException ) {
 						accessDenied = true;
