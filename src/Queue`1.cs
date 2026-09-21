@@ -70,7 +70,7 @@ namespace Icod.Collections.Immutable {
 			}
 
 			public IQueue<T> Enqueue( T item ) { 
-				return new Queue<T>( Stack<T>.GetEmpty().Push( item ), Stack<T>.GetEmpty() );
+				return new Queue<T>( Stack<T>.Empty.Push( item ), Stack<T>.Empty );
 			}
 
 			void System.Collections.Generic.ICollection<T>.Add( T item ) {
@@ -182,9 +182,9 @@ namespace Icod.Collections.Immutable {
 
 
 		#region properties
-		public IQueue<T> Empty { 
+		public static IQueue<T> Empty { 
 			get { 
-				return GetEmpty();
+				return theEmpty;
 			}
 		}
 		public System.Int32 Count {
@@ -218,9 +218,9 @@ namespace Icod.Collections.Immutable {
 			IStack<T> f = myRead.Pop();
 			if ( f.IsEmpty ) { 
 				if ( myWrite.IsEmpty ) { 
-					return Queue<T>.GetEmpty();
+					return Queue<T>.Empty;
 				} else { 
-					return new Queue<T>( myWrite.Reverse(), Stack<T>.GetEmpty() );
+					return new Queue<T>( myWrite.Reverse(), Stack<T>.Empty );
 				}
 			} else { 
 				return new Queue<T>( f, myWrite );
@@ -291,7 +291,7 @@ namespace Icod.Collections.Immutable {
 			} else if ( this.Count < count ) { 
 				throw new System.ArgumentException( "count is greater than number of elements in queue reference.", "count" );
 			} else { 
-				IStack<T> begin = Stack<T>.GetEmpty();
+				IStack<T> begin = Stack<T>.Empty;
 				IStack<T> read = myRead;
 				IStack<T> write = myWrite.Reverse();
 				for ( System.Int32 i = 0; i < count; i++ ) { 
@@ -318,7 +318,7 @@ namespace Icod.Collections.Immutable {
 			read = read.Pop();
 			if ( read.IsEmpty ) { 
 				read = write.Reverse();
-				write = Stack<T>.GetEmpty();
+				write = Stack<T>.Empty;
 			}
 			T b = read.Peek();
 			read = read.Pop();
@@ -348,7 +348,7 @@ namespace Icod.Collections.Immutable {
 			}
 			write = write.Rotate( count, shift );
 
-			return new Queue<T>( Stack<T>.GetEmpty().Push( write.Peek() ), write.Pop().Reverse() );
+			return new Queue<T>( Stack<T>.Empty.Push( write.Peek() ), write.Pop().Reverse() );
 		}
 
 		public IQueue<T> Reverse() { 
@@ -359,13 +359,6 @@ namespace Icod.Collections.Immutable {
 			return myHashCode;
 		}
 		#endregion methods
-
-
-		#region static methods
-		public static IQueue<T> GetEmpty() { 
-			return theEmpty;
-		}
-		#endregion static methods
 
 	}
 

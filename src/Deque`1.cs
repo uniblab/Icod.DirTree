@@ -64,8 +64,8 @@ namespace Icod.Collections.Immutable {
 			private readonly System.Int32 myHashCode;
 			private readonly T v1;
 
-			private Mini1() : base() { 
-				myHashCode = GetEmpty().GetHashCode();
+			private Mini1() : base() {
+				myHashCode = Deque<T>.Empty.GetHashCode();
 			}
 			public Mini1( T t ) : this() { 
 				v1 = t;
@@ -120,8 +120,8 @@ namespace Icod.Collections.Immutable {
 			private readonly T v1;
 			private readonly T v2;
 
-			private Mini2() : base() { 
-				myHashCode = GetEmpty().GetHashCode();
+			private Mini2() : base() {
+				myHashCode = Deque<T>.Empty.GetHashCode();
 			}
 			public Mini2( T t1, T t2 ) : this() {
 				v1 = t1;
@@ -165,10 +165,10 @@ namespace Icod.Collections.Immutable {
 			}
 
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumerator() {
-				return Stack<T>.GetEmpty().Push( v2 ).Push( v1 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v2 ).Push( v1 ).GetEnumerator();
 			}
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumeratorReversed() {
-				return Stack<T>.GetEmpty().Push( v1 ).Push( v2 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v1 ).Push( v2 ).GetEnumerator();
 			}
 
 			public sealed override System.Int32 GetHashCode() {
@@ -181,8 +181,8 @@ namespace Icod.Collections.Immutable {
 			private readonly T v2;
 			private readonly T v3;
 
-			private Mini3() : base() { 
-				myHashCode = GetEmpty().GetHashCode();
+			private Mini3() : base() {
+				myHashCode = Deque<T>.Empty.GetHashCode();
 			}
 			public Mini3( T t1, T t2, T t3 ) : this() {
 				v1 = t1;
@@ -231,10 +231,10 @@ namespace Icod.Collections.Immutable {
 			}
 
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumerator() {
-				return Stack<T>.GetEmpty().Push( v3 ).Push( v2 ).Push( v1 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v3 ).Push( v2 ).Push( v1 ).GetEnumerator();
 			}
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumeratorReversed() {
-				return Stack<T>.GetEmpty().Push( v1 ).Push( v2 ).Push( v3 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v1 ).Push( v2 ).Push( v3 ).GetEnumerator();
 			}
 
 			public sealed override System.Int32 GetHashCode() {
@@ -248,8 +248,8 @@ namespace Icod.Collections.Immutable {
 			private readonly T v3;
 			private readonly T v4;
 
-			private Mini4() : base() { 
-				myHashCode = GetEmpty().GetHashCode();
+			private Mini4() : base() {
+				myHashCode = Deque<T>.Empty.GetHashCode();
 			}
 			public Mini4( T t1, T t2, T t3, T t4 ) : this() {
 				v1 = t1;
@@ -307,10 +307,10 @@ namespace Icod.Collections.Immutable {
 			}
 
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumerator() { 
-				return Stack<T>.GetEmpty().Push( v4 ).Push( v3 ).Push( v2 ).Push( v1 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v4 ).Push( v3 ).Push( v2 ).Push( v1 ).GetEnumerator();
 			}
 			public sealed override System.Collections.Generic.IEnumerator<T> GetEnumeratorReversed() { 
-				return Stack<T>.GetEmpty().Push( v1 ).Push( v2 ).Push( v3 ).Push( v4 ).GetEnumerator();
+				return Stack<T>.Empty.Push( v1 ).Push( v2 ).Push( v3 ).Push( v4 ).GetEnumerator();
 			}
 
 			public sealed override System.Int32 GetHashCode() {
@@ -332,19 +332,9 @@ namespace Icod.Collections.Immutable {
 			public EmptyDeque() : base() { 
 			}
 
-			IQueue<T> IQueue<T>.Empty { 
+			public static IDeque<T> Empty { 
 				get { 
-					return this;
-				}
-			}
-			IStack<T> IStack<T>.Empty { 
-				get { 
-					return this;
-				}
-			}
-			public IDeque<T> Empty { 
-				get { 
-					return this;
+					return Deque<T>.Empty;
 				}
 			}
 			public System.Boolean IsEmpty { 
@@ -546,19 +536,9 @@ namespace Icod.Collections.Immutable {
 				}
 			}
 
-			IStack<T> IStack<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			IQueue<T> IQueue<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			public IDeque<T> Empty { 
-				get { 
-					return GetEmpty();
+			public static IDeque<T> Empty { 
+				get {
+					return Deque<T>.Empty;
 				}
 			}
 			public System.Boolean IsEmpty { 
@@ -600,14 +580,14 @@ namespace Icod.Collections.Immutable {
 			}
 			public IDeque<T> DequeueLeft() { 
 				if ( 1 == myStore.Count ) {
-					return Deque<T>.GetEmpty();
+					return Deque<T>.Empty;
 				} else { 
 					return new Single( myStore.DequeueLeft() );
 				}
 			}
 			public IDeque<T> DequeueRight() { 
 				if ( 1 == myStore.Count ) {
-					return Deque<T>.GetEmpty();
+					return Deque<T>.Empty;
 				} else { 
 					return new Single( myStore.DequeueRight() );
 				}
@@ -843,19 +823,9 @@ namespace Icod.Collections.Immutable {
 				}
 			}
 
-			IStack<T> IStack<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			IQueue<T> IQueue<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			public IDeque<T> Empty { 
-				get { 
-					return GetEmpty();
+			public static IDeque<T> Empty { 
+				get {
+					return Deque<T>.Empty;
 				}
 			}
 			public System.Boolean IsEmpty {
@@ -1164,19 +1134,9 @@ namespace Icod.Collections.Immutable {
 				}
 			}
 
-			IStack<T> IStack<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			IQueue<T> IQueue<T>.Empty { 
-				get { 
-					return this.Empty;
-				}
-			}
-			public IDeque<T> Empty { 
-				get { 
-					return GetEmpty();
+			public static IDeque<T> Empty { 
+				get {
+					return Deque<T>.Empty;
 				}
 			}
 			public System.Boolean IsEmpty { 
@@ -1208,7 +1168,7 @@ namespace Icod.Collections.Immutable {
 						if ( myRight.IsFull ) { 
 							return new Deque<T>( 
 								new Mini1( item ),
-								Deque<MiniDeque>.GetEmpty().EnqueueLeft( myLeft ).EnqueueRight( myMiddle ), 
+								Deque<MiniDeque>.Empty.EnqueueLeft( myLeft ).EnqueueRight( myMiddle ), 
 								myRight, 
 								myCount + 1 
 							);
@@ -1243,7 +1203,7 @@ namespace Icod.Collections.Immutable {
 						if ( myLeft.IsFull ) { 
 							return new Deque<T>( 
 								myLeft,
-								Deque<MiniDeque>.GetEmpty().EnqueueLeft( myMiddle ).EnqueueRight( myRight ), 
+								Deque<MiniDeque>.Empty.EnqueueLeft( myMiddle ).EnqueueRight( myRight ), 
 								new Mini1( item ), 
 								myCount + 1 
 							);
@@ -1550,19 +1510,9 @@ namespace Icod.Collections.Immutable {
 
 
 		#region properties
-		IStack<T> IStack<T>.Empty { 
+		public static IDeque<T> Empty { 
 			get { 
-				return this.Empty;
-			}
-		}
-		IQueue<T> IQueue<T>.Empty { 
-			get { 
-				return this.Empty;
-			}
-		}
-		public IDeque<T> Empty { 
-			get { 
-				return GetEmpty();
+				return theEmpty;
 			}
 		}
 		public System.Boolean IsEmpty { 
@@ -1835,7 +1785,7 @@ namespace Icod.Collections.Immutable {
 		}
 
 		public IDeque<T> Reverse() { 
-			IDeque<MiniDeque> middle = Deque<MiniDeque>.GetEmpty();
+			IDeque<MiniDeque> middle = Deque<MiniDeque>.Empty;
 			IDeque<MiniDeque> source = myMiddle;
 			while ( !source.IsEmpty ) { 
 				middle = middle.EnqueueRight( source.PeekRight().Reverse() );
@@ -1891,10 +1841,6 @@ namespace Icod.Collections.Immutable {
 
 
 		#region static methods
-		public static IDeque<T> GetEmpty() { 
-			return theEmpty;
-		}
-
 		private static IStack<T> StackRotate( IDeque<T> deque, System.Int32 count, System.Int32 shift ) { 
 			if ( null == deque ) { 
 				throw new System.ArgumentNullException( "deque" );
@@ -1911,7 +1857,7 @@ namespace Icod.Collections.Immutable {
 			}
 
 			IDeque<T> source = deque;
-			IStack<T> hold = Stack<T>.GetEmpty();
+			IStack<T> hold = Stack<T>.Empty;
 			for ( System.Int32 i = 0; i < count; i++ ) { 
 				hold = hold.Push( source.PeekRight() );
 				source = source.DequeueRight();
@@ -1938,7 +1884,7 @@ namespace Icod.Collections.Immutable {
 				return deque;
 			}
 
-			IStack<T> hold = Stack<T>.GetEmpty();
+			IStack<T> hold = Stack<T>.Empty;
 			for ( System.Int32 i = 0; i < count; i++ ) { 
 				hold = hold.Push( deque.PeekLeft() );
 				deque = deque.DequeueLeft();

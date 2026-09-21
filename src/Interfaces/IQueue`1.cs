@@ -22,10 +22,6 @@
 namespace Icod.Collections.Immutable {
 
 	public interface IQueue<T> : System.Collections.Generic.ICollection<T> { 
-
-		IQueue<T> Empty { 
-			get;
-		}
 		System.Boolean IsEmpty { 
 			get;
 		}

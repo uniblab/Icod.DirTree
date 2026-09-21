@@ -23,9 +23,6 @@ namespace Icod.Collections.Immutable {
 
 	public interface IStack<T> : System.Collections.Generic.ICollection<T> { 
 
-		IStack<T> Empty { 
-			get;
-		}
 		System.Boolean IsEmpty { 
 			get;
 		}

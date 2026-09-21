@@ -219,7 +219,7 @@ Print directory tree.
 			var pathResolver = new Icod.Path.CanonicalPathResolver( fsProvider );
 
 			var visitedPhysicalPaths = new HashSet<string>( stringComparer );
-			var stack = Icod.Collections.Immutable.Stack<TreeFrame>.GetEmpty();
+			var stack = Icod.Collections.Immutable.Stack<TreeFrame>.Empty;
 
 			string absoluteRoot = System.IO.Path.GetFullPath( rootPath );
 			stack = stack.Push( new TreeFrame( absoluteRoot, string.Empty, IsLast: true, IsRoot: true ) );
@@ -234,8 +234,14 @@ Print directory tree.
 				if ( current.IsRoot ) {
 					yield return $"[D] {System.IO.Path.GetFileName( path )}";
 				} else {
-					string marker = isDir ? "[D] " : "[F] ";
-					string branch = current.IsLast ? "└── " : "├── ";
+					string marker = isDir
+						? "[D] "
+						: "[F] "
+					;
+					string branch = current.IsLast
+						? "└── "
+						: "├── "
+					;
 					yield return $"{current.Indent}{branch}{marker}{System.IO.Path.GetFileName( path )}";
 				}
 

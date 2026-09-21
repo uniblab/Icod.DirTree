@@ -174,9 +174,9 @@ namespace Icod.Collections.Immutable {
 
 
 		#region properties
-		public IStack<T> Empty { 
+		public static IStack<T> Empty { 
 			get { 
-				return GetEmpty();
+				return theEmpty;
 			}
 		}
 		public System.Boolean IsEmpty {
@@ -326,7 +326,7 @@ namespace Icod.Collections.Immutable {
 		}
 
 		public IStack<T> Reverse() {
-			IStack<T> output = Stack<T>.GetEmpty();
+			IStack<T> output = Stack<T>.Empty;
 
 			IStack<T> probe = this;
 			while ( !probe.IsEmpty ) { 
@@ -354,9 +354,6 @@ namespace Icod.Collections.Immutable {
 			}
 
 			return output;
-		}
-		public static IStack<T> GetEmpty() { 
-			return theEmpty;
 		}
 		#endregion static methods
 

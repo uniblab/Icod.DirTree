@@ -23,9 +23,6 @@ namespace Icod.Collections.Immutable {
 
 	public interface IDeque<T> : System.Collections.Generic.ICollection<T>, IQueue<T>, IStack<T> { 
 
-		new IDeque<T> Empty { 
-			get;
-		}
 		new System.Int32 Count { 
 			get;
 		}
