@@ -31,8 +31,40 @@ using Icod.CommandFramework.Diagnostics;
 namespace Icod.DirTree {
 
 	public static class Command {
+
+		#region nested types
+		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot );
+
+		/// <summary>
+		/// Explicit implementation of your ICanonicalPathFileSystemProvider interface 
+		/// to safely bridge .NET 10 file system capabilities to the CanonicalPathResolver.
+		/// </summary>
+		private class LocalFileSystemProvider : Icod.Path.ICanonicalPathFileSystemProvider {
+			public string GetCanonicalPath( string path ) => System.IO.Path.GetFullPath( path );
+
+			public FileSystemInfo? ResolveLinkTarget( string path, bool returnFinalTarget ) =>
+				Directory.ResolveLinkTarget( path, returnFinalTarget );
+
+
+			public Icod.Path.PathPlatformSemantics Semantics => OperatingSystem.IsWindows()
+				? Icod.Path.PathPlatformSemantics.Windows
+				: Icod.Path.PathPlatformSemantics.Posix
+			;
+
+			public string CurrentDirectory => Environment.CurrentDirectory;
+
+			public ValueTask<Icod.Path.PathComponentObservation> ObserveAsync( string path, CancellationToken cancellationToken ) {
+				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation ) );
+			}
+		}
+		#endregion nested types
+
+
+		#region fields
 		private const string PROGRAM = "dirtree";
 		private const string VERSION = "dirtree (Icod.DirTree) 1.0";
+		#endregion fields
+
 
 		/// <summary>
 		/// Executes <c>dirtree</c> synchronously with optional standard-stream substitution.
@@ -173,111 +205,6 @@ Print directory tree.
 				).ConfigureAwait( false );
 			}
 			return true;
-		}
-
-		public static IEnumerable<string> GlobFiles( IReadOnlyList<string> segments, System.Boolean includeFiles ) {
-
-			if ( segments == null || segments.Count == 0 ) {
-				yield break;
-			}
-
-			// Initialize your immutable queue structure using its Empty factory pattern
-			var frontier = Icod.Collections.Immutable.Queue<SearchState>.GetEmpty();
-
-			// Seed the queue with the root path segment (e.g., "C:\") at segment index 1
-			frontier = frontier.Enqueue( new SearchState( segments[ 0 ], 1 ) );
-
-			// Loop until the immutable queue reports itself empty via your IIsEmpty interface contract
-			while ( !frontier.IsEmpty ) {
-				// Read the front element
-				SearchState state = frontier.Peek();
-
-				// Advance the frontier by assigning the returned modified queue instance
-				frontier = frontier.Dequeue();
-
-				string dir = state.CurrentDir;
-				int idx = state.SegmentIndex;
-
-				// Base Case: We have reached the final path segment
-				if ( idx == segments.Count - 1 ) {
-					string lastPattern = segments[ idx ];
-					if ( System.IO.Directory.Exists( dir ) ) {
-						// Directories are always reported if they match the final structural constraint
-						// Check if the final segment pattern matches any subdirectories here
-						string[] matchingDirs = System.IO.Directory.GetDirectories( dir, lastPattern, System.IO.SearchOption.TopDirectoryOnly );
-						foreach ( var matchingDir in matchingDirs ) {
-							yield return matchingDir;
-						}
-
-						// Files are only reported if the includeFiles flag is explicitly true
-						if ( includeFiles ) {
-							string[] matchingFiles = System.IO.Directory.GetFiles( dir, lastPattern, System.IO.SearchOption.TopDirectoryOnly );
-							foreach ( var matchingFile in matchingFiles ) {
-								yield return matchingFile;
-							}
-						}
-					}
-					continue;
-				}
-
-				string currentToken = segments[ idx ];
-
-				// Case 1: The Wildcard Recurse Token '**'
-				if ( currentToken == "**" ) {
-					// 1a. '**' can match ZERO directories. 
-					// We test this scenario by immediately matching the NEXT segment against the current directory.
-					frontier = frontier.Enqueue( new SearchState( dir, idx + 1 ) );
-
-					// 1b. '**' can match ONE OR MORE directories.
-					// We grab immediate subdirectories, report them, and keep them at the SAME segment index to recurse further.
-					if ( System.IO.Directory.Exists( dir ) ) {
-						string[] subDirs = System.IO.Directory.GetDirectories( dir, "*", System.IO.SearchOption.TopDirectoryOnly );
-						foreach ( string sub in subDirs ) {
-							yield return sub; // Directory discovered via traversal is reported
-							frontier = frontier.Enqueue( new SearchState( sub, idx ) );
-						}
-					}
-				}
-				// Case 2: A concrete directory name (e.g., "samples") or a localized wildcard segment (e.g., "src*")
-				else {
-					if ( System.IO.Directory.Exists( dir ) ) {
-						// Filter directories immediately at the OS level using the path token string pattern
-						string[] matchingSubs = System.IO.Directory.GetDirectories( dir, currentToken, System.IO.SearchOption.TopDirectoryOnly );
-						foreach ( string sub in matchingSubs ) {
-							yield return sub; // Directory discovered via traversal is reported
-											  // Progress happily to the next segment constraint
-							frontier = frontier.Enqueue( new SearchState( sub, idx + 1 ) );
-						}
-					}
-				}
-			}
-		}
-
-		private record SearchState( string CurrentDir, int SegmentIndex );
-
-		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot );
-
-		/// <summary>
-		/// Explicit implementation of your ICanonicalPathFileSystemProvider interface 
-		/// to safely bridge .NET 10 file system capabilities to the CanonicalPathResolver.
-		/// </summary>
-		private class LocalFileSystemProvider : Icod.Path.ICanonicalPathFileSystemProvider {
-			public string GetCanonicalPath( string path ) => System.IO.Path.GetFullPath( path );
-
-			public FileSystemInfo? ResolveLinkTarget( string path, bool returnFinalTarget ) =>
-				Directory.ResolveLinkTarget( path, returnFinalTarget );
-
-
-			public Icod.Path.PathPlatformSemantics Semantics => OperatingSystem.IsWindows()
-				? Icod.Path.PathPlatformSemantics.Windows
-				: Icod.Path.PathPlatformSemantics.Posix
-			;
-
-			public string CurrentDirectory => Environment.CurrentDirectory;
-
-			public ValueTask<Icod.Path.PathComponentObservation> ObserveAsync( string path, CancellationToken cancellationToken ) {
-				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation ) );
-			}
 		}
 
 		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles ) {
