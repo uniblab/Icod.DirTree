@@ -63,6 +63,16 @@ namespace Icod.DirTree {
 		#region fields
 		private const string PROGRAM = "dirtree";
 		private const string VERSION = "dirtree (Icod.DirTree) 1.0";
+		private const string theHelpText = """
+Usage: dirtree [OPTION] [PATH]...
+Print directory tree.
+
+      --help     display this help and exit
+      --version  output version information and exit
+      --files    include files in the output tree
+	  --hidden   include hidden directories in the output tree
+      PATH       the root directory from where to start the tree (default: current directory)
+""";
 		#endregion fields
 
 
@@ -133,6 +143,11 @@ namespace Icod.DirTree {
 					longNames: new[] { "version" }
 				),
 				new OptionDefinition(
+					"hidden",
+					shortName: 'H',
+					longNames: new[] { "hidden" }
+				),
+				new OptionDefinition(
 					"files",
 					shortName: 'f',
 					longNames: new[] { "files" }
@@ -144,16 +159,8 @@ namespace Icod.DirTree {
 					return 1;
 				}
 				if ( result.HasOption( "help" ) ) {
-					const string help = """
-Usage: dirtree [OPTION]...
-Print directory tree.
-
-      --help     display this help and exit
-      --version  output version information and exit
-
-""";
 					await context.StandardOutput.WriteAsync(
-						help.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
+						theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
 						context.CancellationToken
 					).ConfigureAwait( false );
 					return 0;
@@ -170,12 +177,19 @@ Print directory tree.
 						$"extra operand '{result.Operands[ 0 ]}'",
 						context.CancellationToken
 					).ConfigureAwait( false );
+					await context.StandardOutput.WriteAsync(
+						theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
+						context.CancellationToken
+					).ConfigureAwait( false );
 					return 1;
 				}
 				context.CancellationToken.ThrowIfCancellationRequested();
-
+				System.String directoryPathName = ( 0 == result.Operands.Count )
+					? Environment.CurrentDirectory
+					: result.Operands[ 0 ]
+				;
 				// here is where we spit out the text
-				foreach ( var entry in RenderDirectoryTree( args[ 0 ], result.HasOption( "files" ) ) ) {
+				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), result.HasOption( "hidden" ) ) ) {
 					System.Console.Out.WriteLine( entry );
 				}
 
@@ -206,7 +220,7 @@ Print directory tree.
 			return true;
 		}
 
-		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles ) {
+		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles, bool showHidden ) {
 			if ( !Directory.Exists( rootPath ) ) {
 				yield break;
 			}
@@ -258,7 +272,11 @@ Print directory tree.
 					var children = new List<string>();
 					System.Boolean accessDenied = false;
 					try {
-						children.AddRange( Directory.GetDirectories( path, "*", SearchOption.TopDirectoryOnly ) );
+						
+						children.AddRange( Directory.GetDirectories( path, "*", SearchOption.TopDirectoryOnly ).Where(
+							d => showHidden
+								|| 0 == ( new DirectoryInfo( d ).Attributes & FileAttributes.Hidden )
+						) );
 
 						if ( includeFiles ) {
 							children.AddRange( Directory.GetFiles( path, "*", SearchOption.TopDirectoryOnly ) );
