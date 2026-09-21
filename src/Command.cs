@@ -67,10 +67,10 @@ namespace Icod.DirTree {
 Usage: dirtree [OPTION] [PATH]...
 Print directory tree.
 
-      --help     display this help and exit
-      --version  output version information and exit
-      --files    include files in the output tree
-	  --hidden   include hidden directories in the output tree
+      -h | --help     display this help and exit
+      -v | --version  output version information and exit
+      -f | --files    include files in the output tree
+	  -H --hidden   include hidden directories in the output tree
       PATH       the root directory from where to start the tree (default: current directory)
 """;
 		#endregion fields
