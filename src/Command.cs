@@ -180,8 +180,7 @@ Print directory tree.
 				}
 
 				return 0;
-			}
-			catch ( OperationCanceledException ) {
+			} catch ( OperationCanceledException ) {
 				return CommandExitCodes.Canceled;
 			}
 		}
@@ -273,7 +272,7 @@ Print directory tree.
 
 					string nextIndent = current.IsRoot ? string.Empty : current.Indent + ( current.IsLast ? "    " : "│   " );
 
-					for ( int i = children.Count - 1; i >= 0; i-- ) {
+					for ( int i = children.Count - 1; 0 <= i; i-- ) {
 						bool isLastChild = ( i == children.Count - 1 );
 						stack = stack.Push( new TreeFrame( children[ i ], nextIndent, isLastChild, IsRoot: false ) );
 					}
