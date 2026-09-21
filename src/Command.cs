@@ -71,7 +71,7 @@ Print directory tree.
       -h | --help     display this help and exit
       -v | --version  output version information and exit
       -f | --files    include files in the output tree
-	  -H --hidden   include hidden directories in the output tree
+	  -H --hidden     omit hidden directories in the output tree
       PATH       the root directory from where to start the tree (default: current directory)
 """;
 		#endregion fields
@@ -190,7 +190,7 @@ Print directory tree.
 					: result.Operands[ 0 ]
 				;
 				// here is where we spit out the text
-				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), result.HasOption( "hidden" ) ) ) {
+				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), !result.HasOption( "hidden" ) ) ) {
 					System.Console.Out.WriteLine( entry );
 				}
 
