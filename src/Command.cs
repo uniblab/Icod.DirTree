@@ -273,7 +273,6 @@ Print directory tree.
 					var children = new List<string>();
 					System.Boolean accessDenied = false;
 					try {
-						
 						children.AddRange( Directory.GetDirectories( path, "*", SearchOption.TopDirectoryOnly ).Where(
 							d => showHidden
 								|| 0 == ( new DirectoryInfo( d ).Attributes & FileAttributes.Hidden )
