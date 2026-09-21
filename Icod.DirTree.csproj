@@ -48,9 +48,9 @@
 		<Authors>Timothy J. Bruce</Authors>
 		<Description>Cross-platform command-line tool to report subdirectory structure as text tree.</Description>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageProjectUrl>https://github.com/uniblab/Icod.Grep</PackageProjectUrl>
+		<PackageProjectUrl>https://github.com/uniblab/Icod.DirTree</PackageProjectUrl>
 		<RepositoryType>git</RepositoryType>
-		<RepositoryUrl>https://github.com/uniblab/Icod.Grep</RepositoryUrl>
+		<RepositoryUrl>https://github.com/uniblab/Icod.DirTree</RepositoryUrl>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
 		<PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
