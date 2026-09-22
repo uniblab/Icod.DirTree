@@ -243,7 +243,7 @@ Print a text tree for PATH, or for the current directory when PATH is omitted.
 			context.StandardOutput.WriteAsync(
 				theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
 				context.CancellationToken
-			).AsTask();
+			);
 
 		/// <summary>
 		/// Renders a directory tree as text lines.
