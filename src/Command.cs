@@ -1,350 +1,489 @@
 /*
 	Icod.DirTree
 	Cross-platform command-line tool to report subdirectory structure as text tree.
-	Copyright( C) 2026  Timothy J.Bruce<uniblab@hotmail.com>
+	Copyright (C) 2026 Timothy J. Bruce <uniblab@hotmail.com>
 */
 
-/*
-	This program is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option ) any later version.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with this program.If not, see<https://gnu.org>.
-*/
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Icod.Collections.Immutable;
+using System.Globalization;
+using System.Reflection;
+using System.Text;
 using Icod.CommandFramework.CommandLine;
 using Icod.CommandFramework.Diagnostics;
+using Icod.Path;
 
-namespace Icod.DirTree {
+namespace Icod.DirTree;
 
-	/// <summary>
-	/// Implements the <c>dirtree</c> command. Usage: <c>dirtree [OPTION] [PATH]</c>.
-	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// The command prints a text tree rooted at <c>PATH</c>, or at the current directory when no path is supplied.
-	/// The <c>--files</c> option includes files, <c>--hidden</c> omits hidden entries, and <c>--depth=N</c> limits traversal to <c>N</c> directory levels below the root.
-	/// </para>
-	/// <para>
-	/// Only one path operand is accepted. Use <c>--help</c> to print the usage text and <c>--version</c> to print version information.
-	/// </para>
-	/// </remarks>
-	public static class Command {
-
-		#region nested types
-		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot, int Depth );
-
-		/// <summary>
-		/// Explicit implementation of your ICanonicalPathFileSystemProvider interface 
-		/// to safely bridge .NET 10 file system capabilities to the CanonicalPathResolver.
-		/// </summary>
-		private class LocalFileSystemProvider : Icod.Path.ICanonicalPathFileSystemProvider {
-			public string GetCanonicalPath( string path ) => System.IO.Path.GetFullPath( path );
-
-			public FileSystemInfo? ResolveLinkTarget( string path, bool returnFinalTarget ) =>
-				Directory.ResolveLinkTarget( path, returnFinalTarget );
-
-
-			public Icod.Path.PathPlatformSemantics Semantics => OperatingSystem.IsWindows()
-				? Icod.Path.PathPlatformSemantics.Windows
-				: Icod.Path.PathPlatformSemantics.Posix
-			;
-
-			public string CurrentDirectory => Environment.CurrentDirectory;
-
-			public ValueTask<Icod.Path.PathComponentObservation> ObserveAsync( string path, CancellationToken cancellationToken ) {
-				return ValueTask.FromResult( default( Icod.Path.PathComponentObservation )! );
-			}
-		}
-		#endregion nested types
-
-
-		#region fields
-		private const string PROGRAM = "dirtree";
-		private const string VERSION = "dirtree (Icod.DirTree) 1.0";
-		private const string theHelpText = """
+/// <summary>
+/// Implements the <c>dirtree</c> command. Usage: <c>dirtree [OPTION] [PATH]</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// With no operand, the command renders the current directory. Supply one directory pathname to render another root.
+/// Directories are shown by default; use <c>--files</c> to include files, <c>--all</c> to include hidden entries,
+/// <c>--depth=N</c> to limit descent, <c>--ascii</c> for portable branches, and <c>--follow-links</c> to traverse directory links.
+/// </para>
+/// <para>
+/// Output and diagnostics are written through the supplied <see cref="CommandContext"/>. The command returns 0 on success,
+/// 1 after an operational failure, 2 after invalid command-line usage, and 130 after cancellation.
+/// </para>
+/// </remarks>
+internal static class Command {
+	private const string ProgramName = "dirtree";
+	private const int OperationalFailure = 1;
+	private const int UsageFailure = 2;
+	private const string HelpText = """
 Usage: dirtree [OPTION] [PATH]
 Print a text tree for PATH, or for the current directory when PATH is omitted.
 
-      -h | --help         display this help and exit
-      -v | --version      output version information and exit
-      -f | --files        include files in the output tree
-      -H | --hidden       omit hidden files and directories in the output tree
-      -d N | --depth=N    limit directory tree traversal to N levels deep
-      PATH                root directory for the tree
+      -h | --help          display this help and exit
+      -v | --version       output version information and exit
+      -f | --files         include files in the output tree
+      -a | --all           include hidden files and directories
+      -L | --follow-links  follow directory symbolic links and junctions
+           --ascii         use ASCII branch characters
+      -d N | --depth=N     limit traversal to N levels below the root
+      PATH                 root directory for the tree
 """;
-		#endregion fields
 
+	private record TreeEntry(
+		string Path,
+		string Name,
+		bool IsDirectory,
+		bool IsLink,
+		string? LinkTarget
+	);
 
-		/// <summary>
-		/// Executes <c>dirtree</c> synchronously with optional standard-stream substitution.
-		/// </summary>
-		/// <remarks>
-		/// This compatibility entry point blocks on the TAP implementation. A <see langword="null"/> text stream selects the corresponding <see cref="Console"/> stream; caller-supplied streams remain caller-owned.
-		/// </remarks>
-		/// <param name="args">The command-line arguments, excluding the executable name.</param>
-		/// <param name="stdin">The text reader to use as standard input, or <see langword="null"/> to use <see cref="Console.In"/>.</param>
-		/// <param name="stdout">The text writer to use as standard output, or <see langword="null"/> to use <see cref="Console.Out"/>.</param>
-		/// <param name="stderr">The text writer to use as standard error, or <see langword="null"/> to use <see cref="Console.Error"/>.</param>
-		/// <returns>The GNU-compatible process exit status: zero for successful command execution and nonzero for a usage or operational failure.</returns>
-		public static int Run( string[] args, TextReader? stdin = null, TextWriter? stdout = null, TextWriter? stderr = null ) =>
-			RunAsync( args, stdin, stdout, stderr ).GetAwaiter().GetResult();
+	private record TreeFrame(
+		TreeEntry Entry,
+		string Indent,
+		bool IsLast,
+		bool IsRoot,
+		int Depth
+	);
 
-		/// <summary>
-		/// Executes <c>dirtree</c> asynchronously with optional injected standard streams.
-		/// </summary>
-		/// <remarks>
-		/// A <see langword="null"/> text stream selects the corresponding <see cref="Console"/> stream. Caller-supplied streams remain caller-owned.
-		/// </remarks>
-		/// <param name="args">The command-line arguments, excluding the executable name.</param>
-		/// <param name="stdin">The text reader to use as standard input, or <see langword="null"/> to use <see cref="Console.In"/>.</param>
-		/// <param name="stdout">The text writer to use as standard output, or <see langword="null"/> to use <see cref="Console.Out"/>.</param>
-		/// <param name="stderr">The text writer to use as standard error, or <see langword="null"/> to use <see cref="Console.Error"/>.</param>
-		/// <param name="cancellationToken">The token used to cancel parsing, platform queries, and asynchronous I/O.</param>
-		/// <returns>The GNU-compatible process exit status: zero for successful command execution and nonzero for a usage or operational failure.</returns>
-		public static Task<int> RunAsync(
-			string[] args,
-			TextReader? stdin = null,
-			TextWriter? stdout = null,
-			TextWriter? stderr = null,
-			CancellationToken cancellationToken = default
-		) => RunAsync(
-			args ?? Array.Empty<string>(),
-			new CommandContext(
-				PROGRAM,
-				stdin ?? Console.In,
-				stdout ?? Console.Out,
-				stderr ?? Console.Error,
-				cancellationToken: cancellationToken
-			)
-		);
+	private sealed record TreeOptions(
+		bool IncludeFiles,
+		bool IncludeHidden,
+		bool FollowLinks,
+		bool UseAscii,
+		int MaximumDepth
+	);
 
-		/// <summary>
-		/// Executes <c>dirtree</c> asynchronously using a complete shared command context.
-		/// </summary>
-		/// <remarks>
-		/// The context carries text and optional binary standard streams, centralized diagnostics, and cancellation. The command does not dispose caller-owned standard streams.
-		/// </remarks>
-		/// <param name="args">The command-line arguments, excluding the executable name.</param>
-		/// <param name="context">The command context that supplies standard streams, diagnostics, and cancellation.</param>
-		/// <returns>The GNU-compatible process exit status: zero for successful command execution and nonzero for a usage or operational failure.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="context"/> is <see langword="null"/>.</exception>
-		public static async Task<int> RunAsync( string[] args, CommandContext context ) {
-			ArgumentNullException.ThrowIfNull( context );
-			var parser = CreateParser(
-				new OptionDefinition(
-					"help",
-					shortName: 'h',
-					longNames: new[] { "help" }
-				),
-				new OptionDefinition(
-					"version",
-					shortName: 'v',
-					longNames: new[] { "version" }
-				),
-				new OptionDefinition(
-					"hidden",
-					shortName: 'H',
-					longNames: new[] { "hidden" }
-				),
-				new OptionDefinition(
-					"depth",
-					shortName: 'd',
-					longNames: new[] { "depth" },
-					valueArity: OptionValueArity.Required
-				),
-				new OptionDefinition(
-					"files",
-					shortName: 'f',
-					longNames: new[] { "files" }
-				)
-			);
-			try {
-				var result = parser.Parse( args );
-				if ( await WriteParseErrorsAsync( result, context ).ConfigureAwait( false ) ) {
-					return 1;
-				}
-				if ( result.HasOption( "help" ) ) {
-					await WriteUsageAsync( context ).ConfigureAwait( false );
-					return 0;
-				}
-				if ( result.HasOption( "version" ) ) {
-					await context.StandardOutput.WriteLineAsync(
-						VERSION.AsMemory(),
-						context.CancellationToken
-					).ConfigureAwait( false );
-					return 0;
-				}
-				if ( 1 < result.Operands.Count ) {
-					await context.Diagnostics.ErrorAsync(
-						$"extra operand '{result.Operands[ 1 ]}'",
-						context.CancellationToken
-					).ConfigureAwait( false );
-					await WriteUsageAsync( context ).ConfigureAwait( false );
-					return 1;
-				}
-				context.CancellationToken.ThrowIfCancellationRequested();
-				System.String directoryPathName = ( 0 == result.Operands.Count )
-					? Environment.CurrentDirectory
-					: result.Operands[ 0 ]
-				;
-				// here is where we spit out the text
-				int maxDepth = int.MaxValue;
-				if ( result.HasOption( "depth" ) && int.TryParse( result.GetLastValue( "depth" ), out int depthValue ) && ( 0 <= depthValue ) ) {
-					maxDepth = depthValue;
-				}
-				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), !result.HasOption( "hidden" ), maxDepth ) ) {
-					System.Console.Out.WriteLine( entry );
-				}
+	private sealed record TreeRenderResult( bool HadOperationalFailure );
 
+	/// <summary>
+	/// Executes <c>dirtree</c> asynchronously with optional injected standard streams.
+	/// </summary>
+	/// <remarks>
+	/// Pass command-line arguments without the executable name. A <see langword="null"/> stream selects the matching
+	/// <see cref="Console"/> stream; supplied streams remain caller-owned. For example,
+	/// <c>await Command.RunAsync(new[] { "--files", "--depth=2", "." }, stdout: writer)</c>
+	/// captures a two-level tree including files.
+	/// </remarks>
+	/// <param name="args">The command-line arguments, excluding the executable name.</param>
+	/// <param name="stdin">Standard input, or <see langword="null"/> to use <see cref="Console.In"/>.</param>
+	/// <param name="stdout">Standard output, or <see langword="null"/> to use <see cref="Console.Out"/>.</param>
+	/// <param name="stderr">Standard error, or <see langword="null"/> to use <see cref="Console.Error"/>.</param>
+	/// <param name="cancellationToken">A token that cancels parsing, traversal, and output.</param>
+	/// <returns>A task whose result is 0, 1, 2, or 130 as described in the type remarks.</returns>
+	internal static Task<int> RunAsync(
+		string[] args,
+		TextReader? stdin = null,
+		TextWriter? stdout = null,
+		TextWriter? stderr = null,
+		CancellationToken cancellationToken = default
+	) => RunAsync(
+		args ?? Array.Empty<string>(),
+		new CommandContext(
+			ProgramName,
+			stdin ?? Console.In,
+			stdout ?? Console.Out,
+			stderr ?? Console.Error,
+			cancellationToken: cancellationToken
+		)
+	);
+
+	/// <summary>
+	/// Executes <c>dirtree</c> asynchronously with a complete shared command context.
+	/// </summary>
+	/// <remarks>
+	/// Use this overload from an executable host that already owns a <see cref="CommandContext"/>. The context supplies
+	/// standard streams, diagnostics, and cancellation; this method does not dispose any caller-owned resource.
+	/// </remarks>
+	/// <param name="args">The command-line arguments, excluding the executable name.</param>
+	/// <param name="context">The command context that supplies streams, diagnostics, and cancellation.</param>
+	/// <returns>A task whose result is 0, 1, 2, or 130 as described in the type remarks.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="context"/> is <see langword="null"/>.</exception>
+	internal static async Task<int> RunAsync( string[] args, CommandContext context ) {
+		ArgumentNullException.ThrowIfNull( context );
+		try {
+			var parser = CreateParser();
+			var result = parser.Parse( args ?? Array.Empty<string>() );
+			if ( await WriteParseErrorsAsync( result, context ).ConfigureAwait( false ) ) {
+				return UsageFailure;
+			}
+			if ( result.HasOption( "help" ) ) {
+				await WriteUsageAsync( context ).ConfigureAwait( false );
 				return 0;
 			}
-			catch ( OperationCanceledException ) {
-				return CommandExitCodes.Canceled;
-			}
-		}
-
-
-		private static OptionParser CreateParser( params OptionDefinition[] options ) => new(
-			options,
-			new OptionParserSettings {
-				AllowLongOptionAbbreviations = true,
-				Ordering = OptionOrdering.Permute
-			}
-		);
-		private static async Task<bool> WriteParseErrorsAsync( OptionParseResult result, CommandContext context ) {
-			if ( result.IsSuccess ) {
-				return false;
-			}
-			foreach ( var error in result.Errors ) {
-				await context.StandardError.WriteLineAsync(
-					OptionDiagnosticFormatter.Format( context.ProgramName, error ).AsMemory(),
+			if ( result.HasOption( "version" ) ) {
+				await context.StandardOutput.WriteLineAsync(
+					$"{ProgramName} (Icod.DirTree) {GetVersion()}".AsMemory(),
 					context.CancellationToken
 				).ConfigureAwait( false );
+				return 0;
 			}
-			return true;
-		}
+			if ( 1 < result.Operands.Count ) {
+				await context.Diagnostics.ErrorAsync(
+					$"extra operand '{EscapeText( result.Operands[ 1 ] )}'",
+					context.CancellationToken
+				).ConfigureAwait( false );
+				return UsageFailure;
+			}
 
-		private static Task WriteUsageAsync( CommandContext context ) =>
-			context.StandardOutput.WriteAsync(
-				theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
-				context.CancellationToken
+			var maximumDepth = int.MaxValue;
+			if ( result.HasOption( "depth" ) ) {
+				var depthText = result.GetLastValue( "depth" );
+				if ( !int.TryParse( depthText, NumberStyles.None, CultureInfo.InvariantCulture, out maximumDepth )
+					|| 0 > maximumDepth ) {
+					await context.Diagnostics.ErrorAsync(
+						$"invalid depth '{EscapeText( depthText ?? string.Empty )}': expected a nonnegative integer",
+						context.CancellationToken
+					).ConfigureAwait( false );
+					return UsageFailure;
+				}
+			}
+
+			context.CancellationToken.ThrowIfCancellationRequested();
+			var rootPath = 0 == result.Operands.Count
+				? Environment.CurrentDirectory
+				: result.Operands[ 0 ];
+			var rootValidation = ValidateRoot( rootPath );
+			if ( null != rootValidation ) {
+				await context.Diagnostics.ErrorAsync(
+					rootValidation,
+					context.CancellationToken
+				).ConfigureAwait( false );
+				return OperationalFailure;
+			}
+
+			var options = new TreeOptions(
+				IncludeFiles: result.HasOption( "files" ),
+				IncludeHidden: result.HasOption( "all" ),
+				FollowLinks: result.HasOption( "follow-links" ),
+				UseAscii: result.HasOption( "ascii" ),
+				MaximumDepth: maximumDepth
 			);
-
-		/// <summary>
-		/// Renders a directory tree as text lines.
-		/// </summary>
-		/// <param name="rootPath">The root directory to render.</param>
-		/// <param name="includeFiles"><see langword="true"/> to include files; <see langword="false"/> to include directories only.</param>
-		/// <param name="showHidden"><see langword="true"/> to include hidden files and directories; <see langword="false"/> to omit them.</param>
-		/// <param name="maxDepth">The maximum directory depth to traverse, where zero renders only the root.</param>
-		/// <returns>The rendered tree lines in display order.</returns>
-		/// <remarks>
-		/// Missing roots produce no output. Directories are sorted using ordinal comparison on Linux and ordinal ignore-case comparison on other platforms.
-		/// </remarks>
-		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles, bool showHidden, int maxDepth ) {
-			if ( !Directory.Exists( rootPath ) ) {
-				yield break;
-			}
-
-			bool ignoreCase = !OperatingSystem.IsLinux();
-			var stringComparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
-			// Use our local bridge implementation to cleanly initialize the resolver
-			var fsProvider = new LocalFileSystemProvider();
-			var pathResolver = new Icod.Path.CanonicalPathResolver( fsProvider );
-
-			var visitedPhysicalPaths = new HashSet<string>( stringComparer );
-			var stack = Icod.Collections.Immutable.Stack<TreeFrame>.Empty;
-
-			string absoluteRoot = System.IO.Path.GetFullPath( rootPath );
-			stack = stack.Push( new TreeFrame( absoluteRoot, string.Empty, IsLast: true, IsRoot: true, Depth: 0 ) );
-
-			while ( !stack.IsEmpty ) {
-				TreeFrame current = stack.Peek();
-				stack = stack.Pop();
-
-				string path = current.Path;
-				bool isDir = Directory.Exists( path );
-
-				if ( current.IsRoot ) {
-					yield return $"[D] {System.IO.Path.GetFileName( path )}";
-				}
-				else {
-					string marker = isDir
-						? "[D] "
-						: "[F] "
-					;
-					string branch = current.IsLast
-						? "└── "
-						: "├── "
-					;
-					yield return $"{current.Indent}{branch}{marker}{System.IO.Path.GetFileName( path )}";
-				}
-
-				if ( isDir && ( current.Depth < maxDepth ) ) {
-					string canonicalPath = fsProvider.GetCanonicalPath( path );
-
-					// Protect against structural cycles by tracking physical path target strings directly
-					if ( !visitedPhysicalPaths.Add( canonicalPath ) && !current.IsRoot ) {
-						string childIndent = current.Indent + ( current.IsLast ? "    " : "│   " );
-						yield return $"{childIndent}└── [Circular Link / Junction Loop Intercepted]";
-						continue;
-					}
-
-					var children = new List<string>();
-					System.Boolean accessDenied = false;
-					try {
-						children.AddRange( Directory.GetDirectories( path, "*", SearchOption.TopDirectoryOnly ).Where(
-							d => showHidden
-								|| 0 == ( new DirectoryInfo( d ).Attributes & FileAttributes.Hidden )
-						) );
-
-						if ( includeFiles ) {
-							children.AddRange( Directory.GetFiles( path, "*", SearchOption.TopDirectoryOnly ).Where(
-								f => showHidden
-									|| 0 == ( new FileInfo( f ).Attributes & FileAttributes.Hidden )
-							) );
-						}
-					}
-					catch ( UnauthorizedAccessException ) {
-						accessDenied = true;
-					}
-					catch ( IOException ) {
-						continue;
-					}
-					if ( accessDenied ) {
-						string childIndent = current.Indent + ( current.IsLast ? "    " : "│   " );
-						yield return $"{childIndent}└── [Access Denied]";
-						continue;
-					}
-
-					children.Sort( stringComparer );
-
-					string nextIndent = current.IsRoot ? string.Empty : current.Indent + ( current.IsLast ? "    " : "│   " );
-
-					for ( int i = children.Count - 1; 0 <= i; i-- ) {
-						bool isLastChild = ( i == children.Count - 1 );
-						stack = stack.Push( new TreeFrame( children[ i ], nextIndent, isLastChild, IsRoot: false, Depth: current.Depth + 1 ) );
-					}
-				}
-			}
+			var renderResult = await RenderDirectoryTreeAsync(
+				rootPath,
+				options,
+				context
+			).ConfigureAwait( false );
+			return renderResult.HadOperationalFailure ? OperationalFailure : 0;
+		} catch ( OperationCanceledException ) {
+			return CommandExitCodes.Canceled;
 		}
-
 	}
 
+	private static OptionParser CreateParser() => new(
+		new[] {
+			new OptionDefinition( "help", shortName: 'h', longNames: new[] { "help" } ),
+			new OptionDefinition( "version", shortName: 'v', longNames: new[] { "version" } ),
+			new OptionDefinition( "files", shortName: 'f', longNames: new[] { "files" } ),
+			new OptionDefinition( "all", shortName: 'a', longNames: new[] { "all" } ),
+			new OptionDefinition( "follow-links", shortName: 'L', longNames: new[] { "follow-links" } ),
+			new OptionDefinition( "ascii", longNames: new[] { "ascii" } ),
+			new OptionDefinition(
+				"depth",
+				shortName: 'd',
+				longNames: new[] { "depth" },
+				valueArity: OptionValueArity.Required
+			)
+		},
+		new OptionParserSettings {
+			AllowLongOptionAbbreviations = true,
+			Ordering = OptionOrdering.Permute
+		}
+	);
+
+	private static async Task<TreeRenderResult> RenderDirectoryTreeAsync(
+		string rootPath,
+		TreeOptions options,
+		CommandContext context
+	) {
+		var cancellationToken = context.CancellationToken;
+		var absoluteRoot = System.IO.Path.GetFullPath( rootPath );
+		var rootEntry = InspectEntry( absoluteRoot );
+		var comparer = OperatingSystem.IsLinux()
+			? StringComparer.Ordinal
+			: StringComparer.OrdinalIgnoreCase;
+		var resolver = new CanonicalPathResolver();
+		var visitedPhysicalPaths = new HashSet<string>( comparer );
+		var stack = new Stack<TreeFrame>();
+		stack.Push( new TreeFrame( rootEntry, string.Empty, IsLast: true, IsRoot: true, Depth: 0 ) );
+		var hadOperationalFailure = false;
+
+		while ( 0 < stack.Count ) {
+			cancellationToken.ThrowIfCancellationRequested();
+			var current = stack.Pop();
+			await context.StandardOutput.WriteLineAsync(
+				FormatEntry( current, options.UseAscii ).AsMemory(),
+				cancellationToken
+			).ConfigureAwait( false );
+
+			if ( !current.Entry.IsDirectory
+				|| current.Depth >= options.MaximumDepth
+				|| ( current.Entry.IsLink && !options.FollowLinks ) ) {
+				continue;
+			}
+
+			if ( options.FollowLinks ) {
+				var physical = await resolver.ResolvePhysicalAsync(
+					current.Entry.Path,
+					new CanonicalPathResolutionOptions { RequireFinalDirectory = true },
+					cancellationToken
+				).ConfigureAwait( false );
+				if ( !physical.Succeeded ) {
+					hadOperationalFailure = true;
+					await WriteTraversalFailureAsync(
+						context,
+						current.Entry.Path,
+						physical.Failure?.Message ?? "the directory could not be resolved"
+					).ConfigureAwait( false );
+					continue;
+				}
+				if ( !visitedPhysicalPaths.Add( physical.Path! ) ) {
+					if ( !current.IsRoot ) {
+						await WriteMarkerAsync(
+							context.StandardOutput,
+							ChildIndent( current, options.UseAscii ),
+							"[Circular Link / Junction Loop Intercepted]",
+							options.UseAscii,
+							cancellationToken
+						).ConfigureAwait( false );
+					}
+					continue;
+				}
+			}
+
+			List<TreeEntry> children;
+			try {
+				children = EnumerateChildren( current.Entry.Path, options, cancellationToken );
+			} catch ( UnauthorizedAccessException exception ) {
+				hadOperationalFailure = true;
+				await WriteMarkerAsync(
+					context.StandardOutput,
+					ChildIndent( current, options.UseAscii ),
+					"[Access Denied]",
+					options.UseAscii,
+					cancellationToken
+				).ConfigureAwait( false );
+				await WriteTraversalFailureAsync( context, current.Entry.Path, exception.Message ).ConfigureAwait( false );
+				continue;
+			} catch ( IOException exception ) {
+				hadOperationalFailure = true;
+				await WriteMarkerAsync(
+					context.StandardOutput,
+					ChildIndent( current, options.UseAscii ),
+					"[I/O Error]",
+					options.UseAscii,
+					cancellationToken
+				).ConfigureAwait( false );
+				await WriteTraversalFailureAsync( context, current.Entry.Path, exception.Message ).ConfigureAwait( false );
+				continue;
+			}
+
+			children.Sort( ( left, right ) => comparer.Compare( left.Name, right.Name ) );
+			var nextIndent = current.IsRoot
+				? string.Empty
+				: ChildIndent( current, options.UseAscii );
+			for ( var index = children.Count - 1; 0 <= index; index-- ) {
+				cancellationToken.ThrowIfCancellationRequested();
+				stack.Push( new TreeFrame(
+					children[ index ],
+					nextIndent,
+					IsLast: index == children.Count - 1,
+					IsRoot: false,
+					Depth: current.Depth + 1
+				) );
+			}
+		}
+
+		return new TreeRenderResult( hadOperationalFailure );
+	}
+
+	private static List<TreeEntry> EnumerateChildren(
+		string path,
+		TreeOptions options,
+		CancellationToken cancellationToken
+	) {
+		var children = new List<TreeEntry>();
+		foreach ( var childPath in Directory.EnumerateFileSystemEntries( path ) ) {
+			cancellationToken.ThrowIfCancellationRequested();
+			var entry = InspectEntry( childPath );
+			if ( !options.IncludeHidden && IsHidden( entry ) ) {
+				continue;
+			}
+			if ( entry.IsDirectory || options.IncludeFiles ) {
+				children.Add( entry );
+			}
+		}
+		return children;
+	}
+
+	private static TreeEntry InspectEntry( string path ) {
+		var attributes = File.GetAttributes( path );
+		var isLink = 0 != ( attributes & FileAttributes.ReparsePoint );
+		var isDirectory = 0 != ( attributes & FileAttributes.Directory )
+			|| ( isLink && Directory.Exists( path ) );
+		string? linkTarget = null;
+		if ( isLink ) {
+			var information = isDirectory
+				? new DirectoryInfo( path ) as FileSystemInfo
+				: new FileInfo( path );
+			linkTarget = information.LinkTarget;
+		}
+		return new TreeEntry(
+			path,
+			DisplayName( path ),
+			isDirectory,
+			isLink,
+			linkTarget
+		);
+	}
+
+	private static bool IsHidden( TreeEntry entry ) {
+		var name = entry.Name;
+		return ( 1 < name.Length && '.' == name[ 0 ] && "." != name && ".." != name )
+			|| 0 != ( File.GetAttributes( entry.Path ) & FileAttributes.Hidden );
+	}
+
+	private static string FormatEntry( TreeFrame frame, bool useAscii ) {
+		var marker = frame.Entry.IsLink
+			? "[L] "
+			: frame.Entry.IsDirectory ? "[D] " : "[F] ";
+		var branch = frame.IsRoot
+			? string.Empty
+			: frame.IsLast ? ( useAscii ? "`-- " : "└── " ) : ( useAscii ? "|-- " : "├── " );
+		var target = frame.Entry.IsLink && !string.IsNullOrEmpty( frame.Entry.LinkTarget )
+			? $" -> {EscapeText( frame.Entry.LinkTarget )}"
+			: string.Empty;
+		return $"{frame.Indent}{branch}{marker}{EscapeText( frame.Entry.Name )}{target}";
+	}
+
+	private static string ChildIndent( TreeFrame frame, bool useAscii ) =>
+		frame.Indent + ( frame.IsLast ? "    " : useAscii ? "|   " : "│   " );
+
+	private static async Task WriteMarkerAsync(
+		TextWriter output,
+		string indent,
+		string marker,
+		bool useAscii,
+		CancellationToken cancellationToken
+	) {
+		var branch = useAscii ? "`-- " : "└── ";
+		await output.WriteLineAsync(
+			$"{indent}{branch}{marker}".AsMemory(),
+			cancellationToken
+		).ConfigureAwait( false );
+	}
+
+	private static ValueTask WriteTraversalFailureAsync(
+		CommandContext context,
+		string path,
+		string message
+	) => context.Diagnostics.ErrorAsync(
+		$"cannot read '{EscapeText( path )}': {EscapeText( message )}",
+		context.CancellationToken
+	);
+
+	private static string? ValidateRoot( string rootPath ) {
+		try {
+			if ( !File.Exists( rootPath ) && !Directory.Exists( rootPath ) ) {
+				return $"path '{EscapeText( rootPath )}' does not exist";
+			}
+			var attributes = File.GetAttributes( rootPath );
+			if ( 0 == ( attributes & FileAttributes.Directory ) ) {
+				return $"path '{EscapeText( rootPath )}' is not a directory";
+			}
+			return null;
+		} catch ( UnauthorizedAccessException exception ) {
+			return $"cannot access '{EscapeText( rootPath )}': {EscapeText( exception.Message )}";
+		} catch ( IOException exception ) {
+			return $"cannot inspect '{EscapeText( rootPath )}': {EscapeText( exception.Message )}";
+		} catch ( ArgumentException exception ) {
+			return $"invalid path '{EscapeText( rootPath )}': {EscapeText( exception.Message )}";
+		}
+	}
+
+	private static string DisplayName( string path ) {
+		var trimmedPath = System.IO.Path.TrimEndingDirectorySeparator( path );
+		var name = System.IO.Path.GetFileName( trimmedPath );
+		if ( !string.IsNullOrEmpty( name ) ) {
+			return name;
+		}
+		return System.IO.Path.GetPathRoot( path ) ?? path;
+	}
+
+	private static string EscapeText( string value ) {
+		var builder = new StringBuilder( value.Length );
+		foreach ( var character in value ) {
+			switch ( character ) {
+				case '\n':
+					builder.Append( "\\n" );
+					break;
+				case '\r':
+					builder.Append( "\\r" );
+					break;
+				case '\t':
+					builder.Append( "\\t" );
+					break;
+				case '\u001b':
+					builder.Append( "\\x1B" );
+					break;
+				default:
+					if ( char.IsControl( character ) ) {
+						builder.Append( "\\u" );
+						builder.Append( ( (int)character ).ToString( "X4", CultureInfo.InvariantCulture ) );
+					} else {
+						builder.Append( character );
+					}
+					break;
+			}
+		}
+		return builder.ToString();
+	}
+
+	private static string GetVersion() {
+		var version = typeof( Command ).Assembly
+			.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+			.InformationalVersion;
+		if ( string.IsNullOrWhiteSpace( version ) ) {
+			return typeof( Command ).Assembly.GetName().Version?.ToString( 3 ) ?? "unknown";
+		}
+		var metadataIndex = version.IndexOf( '+', StringComparison.Ordinal );
+		return 0 <= metadataIndex ? version[ ..metadataIndex ] : version;
+	}
+
+	private static async Task<bool> WriteParseErrorsAsync(
+		OptionParseResult result,
+		CommandContext context
+	) {
+		if ( result.IsSuccess ) {
+			return false;
+		}
+		foreach ( var error in result.Errors ) {
+			await context.StandardError.WriteLineAsync(
+				OptionDiagnosticFormatter.Format( context.ProgramName, error ).AsMemory(),
+				context.CancellationToken
+			).ConfigureAwait( false );
+		}
+		return true;
+	}
+
+	private static Task WriteUsageAsync( CommandContext context ) =>
+		context.StandardOutput.WriteAsync(
+			HelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
+			context.CancellationToken
+		);
 }
