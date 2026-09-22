@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,30 +32,25 @@ jobs:
         shell: pwsh
         run: |
           git fetch origin main --no-tags
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to fetch main.' }
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
-          if (0 -ne $LASTEXITCODE) {
-              throw "Release tag '$env:GITHUB_REF_NAME' does not point to a commit contained in main."
-          }
+          if (0 -ne $LASTEXITCODE) { throw "Tag '$env:GITHUB_REF_NAME' is not on main." }
       - id: version
-        name: Validate tag and package version
+        name: Validate tag and project versions
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF_NAME -notmatch '^v(?<version>[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?)$') {
-              throw "Release tag '$env:GITHUB_REF_NAME' is not a supported v<semver> tag."
+          if ($env:GITHUB_REF_NAME -cnotmatch '^v(?<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$') {
+              throw "Tag '$env:GITHUB_REF_NAME' must have the form vX.Y.Z."
           }
           $version = $Matches.version
           $projectVersion = (dotnet msbuild Icod.DirTree.csproj -nologo -getProperty:Version).Trim()
-          if (0 -ne $LASTEXITCODE) { throw 'Unable to read Version from Icod.DirTree.csproj.' }
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to read Version.' }
           $packageVersion = (dotnet msbuild Icod.DirTree.csproj -nologo -getProperty:PackageVersion).Trim()
-          if (0 -ne $LASTEXITCODE) { throw 'Unable to read PackageVersion from Icod.DirTree.csproj.' }
-          if ($projectVersion -ne $packageVersion) {
-              throw "Version '$projectVersion' does not match PackageVersion '$packageVersion'."
-          }
-          if ($version -ne $packageVersion) {
-              throw "Tag version '$version' does not match PackageVersion '$packageVersion'."
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to read PackageVersion.' }
+          if ($version -cne $projectVersion -or $version -cne $packageVersion) {
+              throw "Tag '$version', Version '$projectVersion', and PackageVersion '$packageVersion' must match."
           }
           "version=$version" >> $env:GITHUB_OUTPUT
-          "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
   package:
     needs: metadata
@@ -68,20 +62,19 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Restore
         run: dotnet restore Icod.DirTree.sln
-      - name: Build Release package inputs
-        run: dotnet build Icod.DirTree.sln -c ${{ env.CONFIGURATION }} --no-restore -p:ContinuousIntegrationBuild=true
-      - name: Test Release package inputs
-        run: dotnet test Icod.DirTree.sln -c ${{ env.CONFIGURATION }} --no-build --no-restore --logger trx
-      - name: Pack exact Release tool package
-        run: dotnet pack Icod.DirTree.csproj -c ${{ env.CONFIGURATION }} --no-build --no-restore -o artifacts/release -p:ContinuousIntegrationBuild=true
-      - name: Verify exact Release package artifact
+      - name: Build
+        run: dotnet build Icod.DirTree.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+      - name: Test
+        run: dotnet test Icod.DirTree.sln -c Release --no-build --no-restore --logger trx
+      - name: Pack exact Release package
+        run: dotnet pack Icod.DirTree.csproj -c Release --no-build --no-restore -o artifacts/package -p:ContinuousIntegrationBuild=true
+      - name: Verify package contents
         shell: pwsh
-        run: ./packaging/VerifyPackageArtifact.ps1 -ArtifactDirectory artifacts/release -Configuration '${{ env.CONFIGURATION }}' -ExpectedVersion '${{ needs.metadata.outputs.version }}'
-      - name: Upload Release package
-        uses: actions/upload-artifact@v4
+        run: ./packaging/VerifyPackageArtifact.ps1 -ArtifactDirectory artifacts/package -Configuration Release -ExpectedVersion '${{ needs.metadata.outputs.version }}'
+      - uses: actions/upload-artifact@v4
         with:
-          name: release-package
-          path: artifacts/release/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg
+          name: dirtree-release-package
+          path: artifacts/package/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg
           if-no-files-found: error
           retention-days: 7
 
@@ -90,76 +83,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            name: Windows
-          - os: ubuntu-latest
-            name: Linux
-          - os: macos-latest
-            name: macOS
-    name: Package smoke - ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-package
-          path: artifacts/package
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-      - name: Install and exercise Release package
-        shell: pwsh
-        run: |
-          $source = [System.IO.Path]::GetFullPath('artifacts/package')
-          $toolPath = [System.IO.Path]::GetFullPath('artifacts/tool')
-          dotnet tool install Icod.DirTree --tool-path $toolPath --add-source $source --version '${{ needs.metadata.outputs.version }}' --ignore-failed-sources
-          if (0 -ne $LASTEXITCODE) { throw 'Release package installation failed.' }
-          $grep = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { Join-Path $toolPath 'dirtree.exe' } else { Join-Path $toolPath 'dirtree' }
-          & $grep --version
-          if (0 -ne $LASTEXITCODE) { throw 'Release dirtree --version failed.' }
-          [System.IO.File]::WriteAllText('sample.txt', "alpha`nbeta`ngamma`n", [System.Text.UTF8Encoding]::new($false))
-          & $grep -n beta sample.txt
-          if (0 -ne $LASTEXITCODE) { throw 'Release dirtree functional smoke failed.' }
-
-  archives:
-    needs: metadata
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-          - os: windows-11-arm
-            rid: win-arm64
-          - os: ubuntu-24.04
-            rid: linux-x64
-          - os: ubuntu-24.04-arm
-            rid: linux-arm64
-          - os: macos-15-intel
-            rid: osx-x64
-          - os: macos-15
-            rid: osx-arm64
-    name: ${{ matrix.rid }}
+        os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-      - name: Build and smoke release archive
-        shell: pwsh
-        run: >-
-          ./packaging/BuildReleaseArchive.ps1
-          -Configuration '${{ env.CONFIGURATION }}'
-          -RuntimeIdentifier '${{ matrix.rid }}'
-          -Version '${{ needs.metadata.outputs.version }}'
-      - name: Upload release archive
-        uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: release-${{ matrix.rid }}
-          path: artifacts/release/Icod.DirTree-${{ needs.metadata.outputs.version }}-${{ matrix.rid }}.zip
-          if-no-files-found: error
-          retention-days: 7
+          name: dirtree-release-package
+          path: artifacts/package
+      - name: Install and run exact package
+        shell: pwsh
+        run: ./packaging/TestPackedTool.ps1 -ArtifactDirectory artifacts/package -Configuration Release -ExpectedVersion '${{ needs.metadata.outputs.version }}'
 
   publish-nuget:
     needs: [metadata, package, package-smoke]
@@ -174,81 +111,18 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - uses: actions/download-artifact@v4
         with:
-          name: release-package
+          name: dirtree-release-package
           path: artifacts/package
       - id: nuget-login
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
-      - name: Publish to NuGet.org
+      - name: Publish exact package to NuGet.org
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           $package = 'artifacts/package/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg'
+          if (-not (Test-Path -LiteralPath $package -PathType Leaf)) { throw "Missing package '$package'." }
           dotnet nuget push $package --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
           if (0 -ne $LASTEXITCODE) { throw 'NuGet.org publication failed.' }
-
-  publish-github-packages:
-    needs: [metadata, package, package-smoke]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-package
-          path: artifacts/package
-      - name: Publish to GitHub Packages
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $package = 'artifacts/package/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg'
-          dotnet nuget push $package --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key $env:GITHUB_TOKEN --skip-duplicate
-          if (0 -ne $LASTEXITCODE) { throw 'GitHub Packages publication failed.' }
-
-  github-release:
-    needs: [metadata, package, package-smoke, archives, publish-nuget, publish-github-packages]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: release-*
-          path: artifacts/release-assets
-          merge-multiple: true
-      - name: Create checksums
-        shell: pwsh
-        run: |
-          $assetDirectory = 'artifacts/release-assets'
-          $files = @(Get-ChildItem -LiteralPath $assetDirectory -File | Where-Object { $_.Extension -in @('.zip', '.nupkg') } | Sort-Object Name)
-          if (7 -ne $files.Count) { throw "Expected seven release binaries before checksumming; found $($files.Count)." }
-          $lines = foreach ($file in $files) {
-              $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-              "$hash  $($file.Name)"
-          }
-          [System.IO.File]::WriteAllLines((Join-Path $assetDirectory 'SHA256SUMS.txt'), $lines, [System.Text.UTF8Encoding]::new($false))
-      - name: Create GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          $version = '${{ needs.metadata.outputs.version }}'
-          $assetDirectory = [System.IO.Path]::GetFullPath('artifacts/release-assets')
-          $assets = @(Get-ChildItem -LiteralPath $assetDirectory -File | Sort-Object Name | ForEach-Object { $_.FullName })
-          if (8 -ne $assets.Count) { throw "Expected eight GitHub Release assets; found $($assets.Count)." }
-          $arguments = @('release','create',$env:GITHUB_REF_NAME,'--verify-tag','--title',"Icod.DirTree $version",'--generate-notes')
-          if ('true' -eq '${{ needs.metadata.outputs.prerelease }}') {
-              $arguments += '--prerelease'
-              $arguments += '--latest=false'
-          }
-          $arguments += $assets
-          & gh @arguments
-          if (0 -ne $LASTEXITCODE) { throw 'GitHub Release creation failed.' }
