@@ -34,7 +34,7 @@ namespace Icod.DirTree {
 	public static class Command {
 
 		#region nested types
-		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot );
+		private record TreeFrame( string Path, string Indent, bool IsLast, bool IsRoot, int Depth );
 
 		/// <summary>
 		/// Explicit implementation of your ICanonicalPathFileSystemProvider interface 
@@ -68,11 +68,12 @@ namespace Icod.DirTree {
 Usage: dirtree [OPTION] [PATH]...
 Print directory tree.
 
-      -h | --help     display this help and exit
-      -v | --version  output version information and exit
-      -f | --files    include files in the output tree
-	  -H --hidden     omit hidden directories in the output tree
-      PATH       the root directory from where to start the tree (default: current directory)
+      -h | --help         display this help and exit
+      -v | --version      output version information and exit
+      -f | --files        include files in the output tree
+	  -H | --hidden       omit hidden files and directories in the output tree
+      -d N | --depth=N    limit directory tree traversal to N levels deep
+      PATH                the root directory from where to start the tree (default: current directory)
 """;
 		#endregion fields
 
@@ -149,6 +150,12 @@ Print directory tree.
 					longNames: new[] { "hidden" }
 				),
 				new OptionDefinition(
+					"depth",
+					shortName: 'd',
+					longNames: new[] { "depth" },
+					valueArity: OptionValueArity.Required
+				),
+				new OptionDefinition(
 					"files",
 					shortName: 'f',
 					longNames: new[] { "files" }
@@ -190,12 +197,17 @@ Print directory tree.
 					: result.Operands[ 0 ]
 				;
 				// here is where we spit out the text
-				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), !result.HasOption( "hidden" ) ) ) {
+				int maxDepth = int.MaxValue;
+				if ( result.HasOption( "depth" ) && int.TryParse( result.GetLastValue( "depth" ), out int depthValue ) && ( 0 <= depthValue ) ) {
+					maxDepth = depthValue;
+				}
+				foreach ( var entry in RenderDirectoryTree( directoryPathName, result.HasOption( "files" ), !result.HasOption( "hidden" ), maxDepth ) ) {
 					System.Console.Out.WriteLine( entry );
 				}
 
 				return 0;
-			} catch ( OperationCanceledException ) {
+			}
+			catch ( OperationCanceledException ) {
 				return CommandExitCodes.Canceled;
 			}
 		}
@@ -221,7 +233,7 @@ Print directory tree.
 			return true;
 		}
 
-		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles, bool showHidden ) {
+		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles, bool showHidden, int maxDepth ) {
 			if ( !Directory.Exists( rootPath ) ) {
 				yield break;
 			}
@@ -237,7 +249,7 @@ Print directory tree.
 			var stack = Icod.Collections.Immutable.Stack<TreeFrame>.Empty;
 
 			string absoluteRoot = System.IO.Path.GetFullPath( rootPath );
-			stack = stack.Push( new TreeFrame( absoluteRoot, string.Empty, IsLast: true, IsRoot: true ) );
+			stack = stack.Push( new TreeFrame( absoluteRoot, string.Empty, IsLast: true, IsRoot: true, Depth: 0 ) );
 
 			while ( !stack.IsEmpty ) {
 				TreeFrame current = stack.Peek();
@@ -248,7 +260,8 @@ Print directory tree.
 
 				if ( current.IsRoot ) {
 					yield return $"[D] {System.IO.Path.GetFileName( path )}";
-				} else {
+				}
+				else {
 					string marker = isDir
 						? "[D] "
 						: "[F] "
@@ -260,7 +273,7 @@ Print directory tree.
 					yield return $"{current.Indent}{branch}{marker}{System.IO.Path.GetFileName( path )}";
 				}
 
-				if ( isDir ) {
+				if ( isDir && ( current.Depth < maxDepth ) ) {
 					string canonicalPath = fsProvider.GetCanonicalPath( path );
 
 					// Protect against structural cycles by tracking physical path target strings directly
@@ -284,9 +297,11 @@ Print directory tree.
 									|| 0 == ( new FileInfo( f ).Attributes & FileAttributes.Hidden )
 							) );
 						}
-					} catch ( UnauthorizedAccessException ) {
+					}
+					catch ( UnauthorizedAccessException ) {
 						accessDenied = true;
-					} catch ( IOException ) {
+					}
+					catch ( IOException ) {
 						continue;
 					}
 					if ( accessDenied ) {
@@ -301,7 +316,7 @@ Print directory tree.
 
 					for ( int i = children.Count - 1; 0 <= i; i-- ) {
 						bool isLastChild = ( i == children.Count - 1 );
-						stack = stack.Push( new TreeFrame( children[ i ], nextIndent, isLastChild, IsRoot: false ) );
+						stack = stack.Push( new TreeFrame( children[ i ], nextIndent, isLastChild, IsRoot: false, Depth: current.Depth + 1 ) );
 					}
 				}
 			}
