@@ -53,41 +53,10 @@ jobs:
         if: matrix.package
         uses: actions/upload-artifact@v4
         with:
-          name: icod-grep-pr-package
+          name: icod-dirtree-pr-package
           path: artifacts/package/*.nupkg
           if-no-files-found: error
           retention-days: 7
-
-  benchmark-smoke:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            name: Windows
-          - os: ubuntu-latest
-            name: Linux
-          - os: macos-latest
-            name: macOS
-    name: Benchmark smoke - ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-      - name: Restore benchmark project
-        run: dotnet restore benchmarks/Grep.Benchmarks/Icod.DirTree.Benchmarks.csproj
-      - name: Build benchmark project
-        run: dotnet build benchmarks/Grep.Benchmarks/Icod.DirTree.Benchmarks.csproj -c ${{ env.CONFIGURATION }} --no-restore -p:ContinuousIntegrationBuild=true
-      - name: Run deterministic benchmark smoke
-        run: dotnet run --project benchmarks/Grep.Benchmarks/Icod.DirTree.Benchmarks.csproj -c ${{ env.CONFIGURATION }} --no-build --no-restore -- --smoke
-      - name: Run deterministic stress smoke
-        run: dotnet run --project benchmarks/Grep.Benchmarks/Icod.DirTree.Benchmarks.csproj -c ${{ env.CONFIGURATION }} --no-build --no-restore -- --stress-smoke artifacts/performance/stress-smoke-${{ matrix.name }}.json
-      - name: Validate pinned 1.5.0 comparison orchestration
-        if: matrix.name == 'Windows'
-        shell: pwsh
-        run: ./benchmarks/Collect-ReferenceComparison.ps1 -Smoke -OutputDirectory artifacts/performance/orchestration-smoke
 
   package-smoke:
     needs: validate
@@ -106,12 +75,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: icod-grep-pr-package
+          name: icod-dirtree-pr-package
           path: artifacts/package
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-      - name: Install and exercise packed grep
+      - name: Install and exercise packed dirtree
         shell: pwsh
         run: |
           $packages = @(Get-ChildItem -LiteralPath 'artifacts/package' -Filter 'Icod.DirTree.*.nupkg' -File)
@@ -123,34 +92,11 @@ jobs:
           $toolPath = [System.IO.Path]::GetFullPath('artifacts/tool')
           dotnet tool install Icod.DirTree --tool-path $toolPath --add-source $source --version $version --ignore-failed-sources
           if (0 -ne $LASTEXITCODE) { throw 'Packed-tool installation failed.' }
-          $grep = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { Join-Path $toolPath 'grep.exe' } else { Join-Path $toolPath 'grep' }
-          $versionOutput = (& $grep --version)
-          if (0 -ne $LASTEXITCODE) { throw 'Packed grep --version failed.' }
-          if ($versionOutput.Trim() -ne "grep (Icod.DirTree) $version") {
-              throw "Packed grep version output '$versionOutput' does not match package version '$version'."
-          }
-          Write-Host $versionOutput
-          [System.IO.File]::WriteAllText('sample.txt', "alpha`nfoobar`ngamma`n", [System.Text.UTF8Encoding]::new($false))
-          & $grep -n foobar sample.txt
-          if (0 -ne $LASTEXITCODE) { throw 'Packed grep functional smoke failed.' }
-          & $grep -P '(?<=foo)bar' sample.txt
-          if (0 -ne $LASTEXITCODE) { throw 'Packed grep PCRE smoke failed.' }
-
-          if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
-              [System.IO.File]::WriteAllBytes(
-                  'crlf.txt',
-                  [System.Text.Encoding]::ASCII.GetBytes("alpha`r`nbeta`r`n")
-              )
-              & $grep -x alpha crlf.txt
-              if (0 -ne $LASTEXITCODE) {
-                  throw 'Packed grep Windows default text-mode CRLF smoke failed.'
-              }
-              & $grep -U -x alpha crlf.txt
-              $binaryStatus = $LASTEXITCODE
-              if (1 -ne $binaryStatus) {
-                  throw "Packed grep Windows -U CRLF smoke returned $binaryStatus; expected 1."
-              }
-              $global:LASTEXITCODE = 0
+          $grep = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { Join-Path $toolPath 'dirtree.exe' } else { Join-Path $toolPath 'dirtree' }
+          $versionOutput = (& dirtree --version)
+          if (0 -ne $LASTEXITCODE) { throw 'Packed dirtree --version failed.' }
+          if ($versionOutput.Trim() -ne "dirtree (Icod.DirTree) $version") {
+              throw "Packed dirtree version output '$versionOutput' does not match package version '$version'."
           }
 
   archive-smoke:

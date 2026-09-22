@@ -95,14 +95,14 @@ jobs:
         if: matrix.package
         uses: actions/upload-artifact@v4
         with:
-          name: icod-grep-main-package
+          name: icod-dirtree-main-package
           path: artifacts/package/*.nupkg
           if-no-files-found: error
           retention-days: 7
       - name: Upload matching Release archive
         uses: actions/upload-artifact@v4
         with:
-          name: icod-grep-main-${{ matrix.rid }}
+          name: icod-dirtree-main-${{ matrix.rid }}
           path: artifacts/release/Icod.DirTree-${{ needs.metadata.outputs.version }}-${{ matrix.rid }}.zip
           if-no-files-found: error
           retention-days: 7

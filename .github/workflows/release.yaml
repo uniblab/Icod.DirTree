@@ -114,12 +114,12 @@ jobs:
           $toolPath = [System.IO.Path]::GetFullPath('artifacts/tool')
           dotnet tool install Icod.DirTree --tool-path $toolPath --add-source $source --version '${{ needs.metadata.outputs.version }}' --ignore-failed-sources
           if (0 -ne $LASTEXITCODE) { throw 'Release package installation failed.' }
-          $grep = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { Join-Path $toolPath 'grep.exe' } else { Join-Path $toolPath 'grep' }
+          $grep = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) { Join-Path $toolPath 'dirtree.exe' } else { Join-Path $toolPath 'dirtree' }
           & $grep --version
-          if (0 -ne $LASTEXITCODE) { throw 'Release grep --version failed.' }
+          if (0 -ne $LASTEXITCODE) { throw 'Release dirtree --version failed.' }
           [System.IO.File]::WriteAllText('sample.txt', "alpha`nbeta`ngamma`n", [System.Text.UTF8Encoding]::new($false))
           & $grep -n beta sample.txt
-          if (0 -ne $LASTEXITCODE) { throw 'Release grep functional smoke failed.' }
+          if (0 -ne $LASTEXITCODE) { throw 'Release dirtree functional smoke failed.' }
 
   archives:
     needs: metadata
