@@ -1,0 +1,128 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 10.0.x
+  CONFIGURATION: Release
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Require tagged commit on main
+        shell: pwsh
+        run: |
+          git fetch origin main --no-tags
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to fetch main.' }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if (0 -ne $LASTEXITCODE) { throw "Tag '$env:GITHUB_REF_NAME' is not on main." }
+      - id: version
+        name: Validate tag and project versions
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_NAME -cnotmatch '^v(?<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$') {
+              throw "Tag '$env:GITHUB_REF_NAME' must have the form vX.Y.Z."
+          }
+          $version = $Matches.version
+          $projectVersion = (dotnet msbuild Icod.DirTree.csproj -nologo -getProperty:Version).Trim()
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to read Version.' }
+          $packageVersion = (dotnet msbuild Icod.DirTree.csproj -nologo -getProperty:PackageVersion).Trim()
+          if (0 -ne $LASTEXITCODE) { throw 'Unable to read PackageVersion.' }
+          if ($version -cne $projectVersion -or $version -cne $packageVersion) {
+              throw "Tag '$version', Version '$projectVersion', and PackageVersion '$packageVersion' must match."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+  package:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore Icod.DirTree.sln
+      - name: Build
+        run: dotnet build Icod.DirTree.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+      - name: Test
+        run: dotnet test Icod.DirTree.sln -c Release --no-build --no-restore --logger trx
+      - name: Pack exact Release package
+        run: dotnet pack Icod.DirTree.csproj -c Release --no-build --no-restore -o artifacts/package -p:ContinuousIntegrationBuild=true
+      - name: Verify package contents
+        shell: pwsh
+        run: ./packaging/VerifyPackageArtifact.ps1 -ArtifactDirectory artifacts/package -Configuration Release -ExpectedVersion '${{ needs.metadata.outputs.version }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dirtree-release-package
+          path: artifacts/package/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg
+          if-no-files-found: error
+          retention-days: 7
+
+  package-smoke:
+    needs: [metadata, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dirtree-release-package
+          path: artifacts/package
+      - name: Install and run exact package
+        shell: pwsh
+        run: ./packaging/TestPackedTool.ps1 -ArtifactDirectory artifacts/package -Configuration Release -ExpectedVersion '${{ needs.metadata.outputs.version }}'
+
+  publish-nuget:
+    needs: [metadata, package, package-smoke]
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dirtree-release-package
+          path: artifacts/package
+      - id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - name: Publish exact package to NuGet.org
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          $package = 'artifacts/package/Icod.DirTree.${{ needs.metadata.outputs.version }}.nupkg'
+          if (-not (Test-Path -LiteralPath $package -PathType Leaf)) { throw "Missing package '$package'." }
+          dotnet nuget push $package --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          if (0 -ne $LASTEXITCODE) { throw 'NuGet.org publication failed.' }
