@@ -2,7 +2,21 @@ namespace Icod.DirTree;
 
 using Icod.CommandFramework.Diagnostics;
 
+/// <summary>
+/// Hosts the <c>dirtree</c> executable. Usage: <c>dirtree [OPTION] [PATH]</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The executable prints a text tree for the current directory or for the single directory named by <c>PATH</c>.
+/// Use <c>--files</c> to include files, <c>--hidden</c> to omit hidden entries, and <c>--depth=N</c> to limit traversal depth.
+/// </para>
+/// </remarks>
 public static class Program {
+	/// <summary>
+	/// Runs <c>dirtree</c> with the process console streams and converts a console interrupt into command cancellation.
+	/// </summary>
+	/// <param name="args">The command-line arguments supplied to <c>dirtree</c>, excluding the executable name.</param>
+	/// <returns>A task whose result is the command exit status.</returns>
 	public static async Task<int> Main( string[] args ) {
 		ArgumentNullException.ThrowIfNull( args );
 
