@@ -31,6 +31,18 @@ using Icod.CommandFramework.Diagnostics;
 
 namespace Icod.DirTree {
 
+	/// <summary>
+	/// Implements the <c>dirtree</c> command. Usage: <c>dirtree [OPTION] [PATH]</c>.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The command prints a text tree rooted at <c>PATH</c>, or at the current directory when no path is supplied.
+	/// The <c>--files</c> option includes files, <c>--hidden</c> omits hidden entries, and <c>--depth=N</c> limits traversal to <c>N</c> directory levels below the root.
+	/// </para>
+	/// <para>
+	/// Only one path operand is accepted. Use <c>--help</c> to print the usage text and <c>--version</c> to print version information.
+	/// </para>
+	/// </remarks>
 	public static class Command {
 
 		#region nested types
@@ -65,15 +77,15 @@ namespace Icod.DirTree {
 		private const string PROGRAM = "dirtree";
 		private const string VERSION = "dirtree (Icod.DirTree) 1.0";
 		private const string theHelpText = """
-Usage: dirtree [OPTION] [PATH]...
-Print directory tree.
+Usage: dirtree [OPTION] [PATH]
+Print a text tree for PATH, or for the current directory when PATH is omitted.
 
       -h | --help         display this help and exit
       -v | --version      output version information and exit
       -f | --files        include files in the output tree
-	  -H | --hidden       omit hidden files and directories in the output tree
+      -H | --hidden       omit hidden files and directories in the output tree
       -d N | --depth=N    limit directory tree traversal to N levels deep
-      PATH                the root directory from where to start the tree (default: current directory)
+      PATH                root directory for the tree
 """;
 		#endregion fields
 
@@ -167,10 +179,7 @@ Print directory tree.
 					return 1;
 				}
 				if ( result.HasOption( "help" ) ) {
-					await context.StandardOutput.WriteAsync(
-						theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
-						context.CancellationToken
-					).ConfigureAwait( false );
+					await WriteUsageAsync( context ).ConfigureAwait( false );
 					return 0;
 				}
 				if ( result.HasOption( "version" ) ) {
@@ -182,13 +191,10 @@ Print directory tree.
 				}
 				if ( 1 < result.Operands.Count ) {
 					await context.Diagnostics.ErrorAsync(
-						$"extra operand '{result.Operands[ 0 ]}'",
+						$"extra operand '{result.Operands[ 1 ]}'",
 						context.CancellationToken
 					).ConfigureAwait( false );
-					await context.StandardOutput.WriteAsync(
-						theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
-						context.CancellationToken
-					).ConfigureAwait( false );
+					await WriteUsageAsync( context ).ConfigureAwait( false );
 					return 1;
 				}
 				context.CancellationToken.ThrowIfCancellationRequested();
@@ -233,6 +239,23 @@ Print directory tree.
 			return true;
 		}
 
+		private static Task WriteUsageAsync( CommandContext context ) =>
+			context.StandardOutput.WriteAsync(
+				theHelpText.ReplaceLineEndings( Environment.NewLine ).AsMemory(),
+				context.CancellationToken
+			).AsTask();
+
+		/// <summary>
+		/// Renders a directory tree as text lines.
+		/// </summary>
+		/// <param name="rootPath">The root directory to render.</param>
+		/// <param name="includeFiles"><see langword="true"/> to include files; <see langword="false"/> to include directories only.</param>
+		/// <param name="showHidden"><see langword="true"/> to include hidden files and directories; <see langword="false"/> to omit them.</param>
+		/// <param name="maxDepth">The maximum directory depth to traverse, where zero renders only the root.</param>
+		/// <returns>The rendered tree lines in display order.</returns>
+		/// <remarks>
+		/// Missing roots produce no output. Directories are sorted using ordinal comparison on Linux and ordinal ignore-case comparison on other platforms.
+		/// </remarks>
 		public static IEnumerable<string> RenderDirectoryTree( string rootPath, bool includeFiles, bool showHidden, int maxDepth ) {
 			if ( !Directory.Exists( rootPath ) ) {
 				yield break;
