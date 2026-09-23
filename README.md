@@ -157,15 +157,15 @@ Pull requests and pushes to `main` build and test on Windows, Linux, and macOS, 
 
 ## AUTHORS AND PROVENANCE
 
-The original `dirtree` utility was written by **Greg Ordy** and **Steve Baker**.
+Inspired by original work from **Greg Ordy**, author of the original `dirtree`; and **Steve Baker**, author of `tree`.
 
-This cross-platform .NET implementation was migrated and is maintained by Timothy J. Bruce <uniblab@hotmail.com>. The repository history available to this project does not identify a canonical URL or release number for the earlier implementation; the original-author attribution is preserved here without inventing one.
+Independent managed .NET implementation by Timothy J. Bruce <uniblab@hotmail.com>.
 
 ## COPYRIGHT AND LICENSE
 
 Copyright (c) 2026 Timothy J. Bruce.
 
-This managed implementation is distributed under the GNU General Public License, version 3 or later. See `LICENSE`. The original-author attribution above is historical provenance and does not independently characterize the licensing of any unavailable upstream distribution.
+This independent managed implementation is distributed under the GNU General Public License, version 3 or later. See `LICENSE`.
 
 ## SEE ALSO
 

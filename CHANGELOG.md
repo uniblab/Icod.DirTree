@@ -4,7 +4,7 @@ All notable changes to `Icod.DirTree` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-09-23
 
 ### Added
 
@@ -25,6 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Propagated console cancellation through the full traversal.
 - Aligned the command, assembly, and NuGet package version at 1.0.0.
 - Made the command implementation internal because the package is distributed as a .NET tool, not a reusable API library.
+- Clarified that this is an independent managed implementation inspired by the earlier `dirtree` and `tree` utilities, and separated historical attribution from package authorship.
 
 ### Fixed
 
