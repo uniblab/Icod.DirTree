@@ -52,7 +52,7 @@ try {
         "$packageId.nuspec", $settingsPath,
         "tools/$targetFramework/any/dirtree.dll",
         "tools/$targetFramework/any/dirtree.runtimeconfig.json",
-        $readme, 'LICENSE', 'icon.png'
+        $readme, 'CHANGELOG.md', 'LICENSE', 'icon.png'
     )) {
         if ($required -notin $entries) { throw "Package '$($package.Name)' is missing '$required'." }
     }

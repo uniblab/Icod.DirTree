@@ -17,8 +17,14 @@ if (-not [System.IO.Path]::IsPathRooted($ArtifactDirectory)) {
 $ArtifactDirectory = [System.IO.Path]::GetFullPath($ArtifactDirectory)
 [xml]$project = Get-Content -LiteralPath (Join-Path $repositoryRoot 'Icod.DirTree.csproj') -Raw
 $version = $project.SelectSingleNode('/Project/PropertyGroup/PackageVersion').InnerText.Trim()
+if ($ExpectedVersion -and $ExpectedVersion -cne $version) {
+    throw "Project package version '$version' does not match expected '$ExpectedVersion'."
+}
 $toolPath = Join-Path $repositoryRoot 'artifacts/tool'
 $configPath = Join-Path $repositoryRoot 'artifacts/tool-install.NuGet.Config'
+if (Test-Path -LiteralPath $toolPath) {
+    Remove-Item -LiteralPath $toolPath -Recurse -Force
+}
 $escapedSource = [System.Security.SecurityElement]::Escape($ArtifactDirectory)
 $config = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -47,8 +53,44 @@ $executable = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatf
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw "Tool installation did not produce '$executable'."
 }
-$output = & $executable --version
-if (0 -ne $LASTEXITCODE -or [string]::IsNullOrWhiteSpace(($output -join ''))) {
-    throw 'Packed dirtree --version failed or produced no output.'
+$versionOutput = @(& $executable --version)
+if (0 -ne $LASTEXITCODE) {
+    throw 'Packed dirtree --version failed.'
 }
-Write-Host "Verified packed dirtree --version on $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription): $($output -join ' ')"
+$expectedVersionOutput = "dirtree (Icod.DirTree) $version"
+if (1 -ne $versionOutput.Count -or $versionOutput[0] -cne $expectedVersionOutput) {
+    throw "Packed dirtree --version returned '$($versionOutput -join ' ')' instead of '$expectedVersionOutput'."
+}
+
+$fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("icod-dirtree-" + [Guid]::NewGuid().ToString('N'))
+$fixture = Join-Path $fixtureRoot 'fixture'
+try {
+    $null = New-Item -ItemType Directory -Path (Join-Path (Join-Path $fixture 'alpha') 'nested') -Force
+    $null = New-Item -ItemType Directory -Path (Join-Path $fixture 'beta') -Force
+    [System.IO.File]::WriteAllText((Join-Path $fixture 'sample.txt'), 'sample')
+
+    $treeOutput = @(& $executable --files --depth=1 --ascii $fixture)
+    if (0 -ne $LASTEXITCODE) {
+        throw 'Packed dirtree traversal smoke test failed.'
+    }
+    $expectedTreeOutput = @(
+        '[D] fixture',
+        '|-- [D] alpha',
+        '|-- [D] beta',
+        '`-- [F] sample.txt'
+    )
+    if ($treeOutput.Count -ne $expectedTreeOutput.Count) {
+        throw "Packed dirtree traversal produced $($treeOutput.Count) lines instead of $($expectedTreeOutput.Count)."
+    }
+    for ($index = 0; $index -lt $expectedTreeOutput.Count; $index++) {
+        if ($treeOutput[$index] -cne $expectedTreeOutput[$index]) {
+            throw "Packed dirtree traversal line $($index + 1) was '$($treeOutput[$index])' instead of '$($expectedTreeOutput[$index])'."
+        }
+    }
+} finally {
+    if (Test-Path -LiteralPath $fixtureRoot) {
+        Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
+    }
+}
+
+Write-Host "Verified packed dirtree $version on $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)."

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.37411.7 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Icod.DirTree", "Icod.DirTree.csproj", "{BBB5AE83-849B-4BEF-9D25-B983F67FBD60}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Icod.DirTree.Tests", "tests\Icod.DirTree.Tests\Icod.DirTree.Tests.csproj", "{C133420A-78A1-40CF-9853-8EFEC8E26321}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,6 +20,12 @@ Global
 		{BBB5AE83-849B-4BEF-9D25-B983F67FBD60}.Staging|Any CPU.Build.0 = Staging|Any CPU
 		{BBB5AE83-849B-4BEF-9D25-B983F67FBD60}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BBB5AE83-849B-4BEF-9D25-B983F67FBD60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Staging|Any CPU.ActiveCfg = Staging|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Staging|Any CPU.Build.0 = Staging|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C133420A-78A1-40CF-9853-8EFEC8E26321}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

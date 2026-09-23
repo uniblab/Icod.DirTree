@@ -22,7 +22,7 @@
 
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<Copyright>2026</Copyright>
+		<Copyright>Copyright (c) 2026 Timothy J. Bruce</Copyright>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net10.0</TargetFramework>
 		<LangVersion>13.0</LangVersion>
@@ -34,14 +34,15 @@
 		<AssemblyName>dirtree</AssemblyName>
 		<RootNamespace>Icod.DirTree</RootNamespace>
 		<Configurations>Debug;Release;Staging</Configurations>
-		<Version>0.1.0</Version>
-		<AssemblyVersion>0.1.0.0</AssemblyVersion>
+		<Version>1.0.0</Version>
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<InformationalVersion>$(Version)</InformationalVersion>
 		<DebugType>portable</DebugType>
 		<DebugSymbols>true</DebugSymbols>
 		<SignAssembly>false</SignAssembly>
 	</PropertyGroup>
 	<PropertyGroup>
-		<PackageVersion>0.1.0</PackageVersion>
+		<PackageVersion>1.0.0</PackageVersion>
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>dirtree</ToolCommandName>
 		<PackageId>Icod.DirTree</PackageId>
@@ -54,8 +55,8 @@
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
 		<PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-		<PackageReleaseNotes></PackageReleaseNotes>
-		<PackageTags></PackageTags>
+		<PackageReleaseNotes>First stable release: safe link handling, deterministic cross-platform tree output, strict diagnostics, cancellation, ASCII output, and tested NuGet tool packaging.</PackageReleaseNotes>
+		<PackageTags>directory tree filesystem command-line tool cli dotnet-tool cross-platform</PackageTags>
 		<PackageIcon>icon.png</PackageIcon>
 	</PropertyGroup>
 	<PropertyGroup Condition=" '$(PlatformTarget)' == '' ">
@@ -107,9 +108,12 @@
 			<Pack>true</Pack>
 			<PackagePath>\</PackagePath>
 		</Content>
+		<Content Include="CHANGELOG.md">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(AssemblyName).CHANGELOG.md</TargetPath>
+			<Pack>true</Pack>
+			<PackagePath>\</PackagePath>
+		</Content>
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="src\Interfaces\" />
-	</ItemGroup>
 </Project>
